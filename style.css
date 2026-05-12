@@ -1,3 +1,9 @@
+/* ═══════════════════════════════════════════════════════
+   FINANCE SYNC PRO - DASHBOARD STYLES (v2.0)
+   ✅ Updated for Apps Script v2.3 API
+   ✅ Status badges, file links, animated stats
+   ═══════════════════════════════════════════════════════ */
+
 /* ===== RESET & BASE ===== */
 * {
     margin: 0;
@@ -11,6 +17,7 @@ body {
     min-height: 100vh;
     padding: 20px;
     color: #333;
+    line-height: 1.6;
 }
 
 .container {
@@ -26,6 +33,7 @@ body {
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
     margin-bottom: 30px;
     text-align: center;
+    position: relative;
 }
 
 .header h1 {
@@ -36,6 +44,25 @@ body {
 
 .header p {
     color: #666;
+    margin-bottom: 15px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9em;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.back-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
 }
 
 /* ===== STATS CARDS ===== */
@@ -52,11 +79,12 @@ body {
     border-radius: 15px;
     box-shadow: 0 5px 20px rgba(0,0,0,0.1);
     text-align: center;
-    transition: transform 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .stat-card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
 }
 
 .stat-card h3 {
@@ -71,6 +99,7 @@ body {
     font-size: 2.5em;
     font-weight: bold;
     color: #667eea;
+    transition: color 0.3s;
 }
 
 .stat-card.total .number {
@@ -90,13 +119,67 @@ body {
     margin-bottom: 20px;
     padding-bottom: 15px;
     border-bottom: 2px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
+/* ===== REFRESH BUTTON ===== */
+.refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9em;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.refresh-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+}
+
+.refresh-btn:active {
+    transform: translateY(0);
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ===== LOADING & ERROR ===== */
 .loading {
     text-align: center;
     padding: 50px;
     color: #667eea;
     font-size: 1.2em;
+}
+
+.loading::after {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #667eea;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 .error {
@@ -106,56 +189,282 @@ body {
     border-radius: 10px;
     text-align: center;
     margin-bottom: 20px;
+    border-left: 4px solid #c33;
 }
 
-table {
+/* ===== DATA TABLE ===== */
+.data-table {
     width: 100%;
     border-collapse: collapse;
-    overflow-x: auto;
-    display: block;
+    font-size: 0.95em;
+    background: white;
 }
 
-thead {
-    background: #667eea;
+.data-table thead {
+    background: linear-gradient(135deg, #1f4e78 0%, #2c5f8d 100%);
     color: white;
 }
 
-th, td {
-    padding: 15px;
+.data-table th,
+.data-table td {
+    padding: 12px 15px;
     text-align: left;
     border-bottom: 1px solid #eee;
 }
 
-th {
+.data-table th {
     font-weight: 600;
     text-transform: uppercase;
-    font-size: 0.85em;
+    font-size: 0.8em;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table tbody tr {
+    transition: background 0.2s, transform 0.2s;
+}
+
+.data-table tbody tr:hover {
+    background: #f8f9ff;
+    transform: scale(1.005);
+}
+
+.data-table tbody tr:nth-child(even) {
+    background: #fafafa;
+}
+
+.data-table tbody tr:nth-child(even):hover {
+    background: #f0f4ff;
+}
+
+/* ===== STATUS BADGE ===== */
+.status-badge {
+    display: inline-block;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-tbody tr:hover {
-    background: #f8f9ff;
+.status-lunas {
+    background: linear-gradient(135deg, #c6efce 0%, #a8e6b3 100%);
+    color: #1a7f37;
+    border: 1px solid #81c784;
 }
 
-/* ===== RESPONSIVE ===== */
+.status-belum {
+    background: linear-gradient(135deg, #ffc7ce 0%, #ffb3ba 100%);
+    color: #9c1b1b;
+    border: 1px solid #ef9a9a;
+}
+
+.status-other {
+    background: linear-gradient(135deg, #fff2cc 0%, #ffe08a 100%);
+    color: #856404;
+    border: 1px solid #ffd54f;
+}
+
+/* ===== FILE LINK ===== */
+.file-link {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    transition: background 0.2s;
+}
+
+.file-link:hover {
+    background: #f0f4ff;
+    color: #764ba2;
+    text-decoration: none;
+}
+
+.file-link::before {
+    content: '📎';
+    font-size: 0.9em;
+}
+
+/* ===== FOOTER INFO ===== */
+.table-footer {
+    text-align: right;
+    color: #666;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    font-size: 0.9em;
+}
+
+/* ===== FILTER BAR (opsional untuk masa depan) ===== */
+.filter-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    padding: 15px;
+    background: #f8f9ff;
+    border-radius: 10px;
+}
+
+.filter-bar select,
+.filter-bar input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 0.9em;
+    background: white;
+}
+
+.filter-bar select:focus,
+.filter-bar input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #888;
+}
+
+.empty-state::before {
+    content: '📭';
+    display: block;
+    font-size: 3em;
+    margin-bottom: 15px;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+    
+    .header {
+        padding: 20px 15px;
+    }
+    
     .header h1 {
         font-size: 1.8em;
+    }
+    
+    .header p {
+        font-size: 0.95em;
+    }
+    
+    .stat-card {
+        padding: 20px 15px;
     }
     
     .stat-card .number {
         font-size: 2em;
     }
     
-    th, td {
+    .content {
+        padding: 20px 15px;
+    }
+    
+    .content h2 {
+        font-size: 1.3em;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .data-table th,
+    .data-table td {
         padding: 10px 8px;
-        font-size: 0.9em;
+        font-size: 0.85em;
+    }
+    
+    .data-table th {
+        font-size: 0.75em;
     }
     
     /* Horizontal scroll untuk tabel di mobile */
-    table {
+    .data-table {
         display: block;
         overflow-x: auto;
         white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
     }
+    
+    .filter-bar {
+        flex-direction: column;
+    }
+    
+    .filter-bar select,
+    .filter-bar input {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .stat-card .number {
+        font-size: 1.8em;
+    }
+    
+    .status-badge {
+        padding: 4px 10px;
+        font-size: 0.75em;
+    }
+    
+    .file-link {
+        font-size: 0.85em;
+    }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+    body {
+        background: white;
+        padding: 0;
+    }
+    
+    .header, .stats, .refresh-btn, .filter-bar {
+        display: none;
+    }
+    
+    .content {
+        box-shadow: none;
+        padding: 0;
+    }
+    
+    .data-table {
+        font-size: 0.8em;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 8px;
+    }
+}
+
+/* ===== ACCESSIBILITY ===== */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus visible untuk keyboard navigation */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
 }
