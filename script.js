@@ -1,41 +1,65 @@
 // ===== KONFIGURASI =====
-// 🔹 PENTING: Tambahkan ?action=getVouchers untuk ambil data (bukan sync)
+// 🔹 Ganti dengan URL DEPLOYMENT BARU Anda
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyd2POlhgSzjdgJ1tYlq8JxRwJ9g2Oq8IDuB1jAObqLGdLi1XFNBdpceroV0GBRAyjk/exec?action=getVouchers';
 
-// Optional: Filter per company (nmsa, ipn, atau 'all')
-const COMPANY_FILTER = 'all'; // Ubah ke 'nmsa' atau 'ipn' jika ingin filter
+// Optional: Filter per company
+const COMPANY_FILTER = 'all';
+
+// Retry config
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 detik
 
 // ===== FUNGSI UTAMA =====
 document.addEventListener('DOMContentLoaded', fetchData);
 
-async function fetchData() {
+async function fetchData(retryCount = 0) {
     try {
         showLoading(true);
         
-        // Build URL dengan filter company jika diperlukan
+        // Build URL dengan filter
         let url = APPS_SCRIPT_URL;
         if (COMPANY_FILTER && COMPANY_FILTER !== 'all') {
-          url += `&company=${COMPANY_FILTER}`;
+            url += `&company=${COMPANY_FILTER}`;
         }
         
         console.log('📡 Fetching:', url);
         
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        // Fetch dengan timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 detik
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors', // Explicit CORS
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+            // Handle redirect 302
+            if (response.status === 302 || response.type === 'opaqueredirect') {
+                console.warn('⚠️ Redirect detected, retrying...');
+                throw new Error('Redirect detected');
+            }
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const result = await response.json();
         console.log('✅ Response received:', result);
         
-        // Handle response format dari Apps Script v2.3
-        if (!result.success) {
-          throw new Error(result.message || 'Unknown error');
+        if (!result?.success) {
+            throw new Error(result?.message || 'Unknown error from server');
         }
         
         const vouchers = normalizeData(result);
         
         if (vouchers.length === 0) {
-          showError('⚠️ Tidak ada data voucher ditemukan');
-          return;
+            showError('⚠️ Tidak ada data voucher ditemukan');
+            return;
         }
         
         console.log(`📊 Displaying ${vouchers.length} vouchers`);
@@ -44,28 +68,40 @@ async function fetchData() {
         
     } catch (error) {
         console.error('❌ Error:', error);
-        showError(`❌ Gagal mengambil  ${error.message}`);
+        
+        // Retry logic untuk CORS/redirect error
+        if (retryCount < MAX_RETRIES && 
+            (error.message.includes('Failed to fetch') || 
+             error.message.includes('CORS') ||
+             error.message.includes('Redirect'))) {
+            
+            console.log(`🔄 Retry ${retryCount + 1}/${MAX_RETRIES}...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
+            return fetchData(retryCount + 1);
+        }
+        
+        // Tampilkan error user-friendly
+        let errorMsg = error.message;
+        if (errorMsg.includes('Failed to fetch')) {
+            errorMsg = '⚠️ Tidak bisa terhubung ke server. Pastikan:<br>1. Apps Script sudah di-deploy ulang<br>2. "Who has access" = Anyone<br>3. URL di script.js sudah benar';
+        } else if (errorMsg.includes('CORS')) {
+            errorMsg = '🔒 Error CORS. Solusi:<br>1. Re-deploy Apps Script sebagai "New deployment"<br>2. Set "Who has access: Anyone"<br>3. Tunggu 2-3 menit lalu refresh';
+        }
+        
+        showError(`❌ Gagal mengambil data:<br><small>${errorMsg}</small>`);
+        
     } finally {
         showLoading(false);
     }
 }
 
 // Normalisasi data dari response Apps Script v2.3
-// Format: { success: true, count: N,  [...] }
 function normalizeData(response) {
-    // Jika response langsung array (fallback)
     if (Array.isArray(response)) return response;
-    
-    // Format baru dari Apps Script v2.3
-    if (response?.success && Array.isArray(response.data)) {
-        return response.data;
-    }
-    
-    // Format lama / fallback lainnya
+    if (response?.success && Array.isArray(response.data)) return response.data;
     if (response?.data && Array.isArray(response.data)) return response.data;
     if (response?.records && Array.isArray(response.records)) return response.records;
     if (response?.vouchers && Array.isArray(response.vouchers)) return response.vouchers;
-    
     return [];
 }
 
@@ -73,9 +109,7 @@ function normalizeData(response) {
 function displayStats(vouchers) {
     const totalVoucher = vouchers.length;
     
-    // Hitung total nominal - sesuaikan dengan field dari Apps Script
     const totalNominal = vouchers.reduce((sum, v) => {
-        // Apps Script v2.3 return field: nominal (number)
         const nominal = 
             typeof v.nominal === 'number' ? v.nominal :
             parseFloat(v.nominal) || 
@@ -90,13 +124,12 @@ function displayStats(vouchers) {
     
     const rataRata = totalVoucher > 0 ? totalNominal / totalVoucher : 0;
     
-    // Update DOM dengan animasi
     animateValue('totalVoucher', 0, totalVoucher, 1000);
     animateValue('totalNominal', 0, totalNominal, 1000, true);
     animateValue('rataRata', 0, rataRata, 1000, true);
 }
 
-// Animasi angka untuk efek smooth
+// Animasi angka
 function animateValue(elementId, start, end, duration, isCurrency = false) {
     const element = document.getElementById(elementId);
     if (!element) return;
@@ -126,7 +159,6 @@ function formatRupiah(angka) {
 function displayTable(vouchers) {
     if (vouchers.length === 0) return;
     
-    // Definisi kolom yang ingin ditampilkan (urutan rapi)
     const columns = [
         { key: 'tanggal', label: 'Tanggal' },
         { key: 'no_invoice', label: 'No Invoice' },
@@ -142,27 +174,22 @@ function displayTable(vouchers) {
     
     const container = document.getElementById('tableContainer');
     
-    // Build table header
     const headerHTML = columns.map(col => `<th>${col.label}</th>`).join('');
     
-    // Build table body
     const rowsHTML = vouchers.map(row => {
         return `<tr>
             ${columns.map(col => {
-                let value = row[col.key] || '-';
+                let value = row[col.key] ?? '-';
                 
-                // Format currency
-                if (col.format === 'currency' && value !== '-') {
+                if (col.format === 'currency' && value !== '-' && value !== '') {
                     value = formatRupiah(value);
                 }
                 
-                // Format link
-                if (col.format === 'link' && value && value !== '-' && value.startsWith('http')) {
+                if (col.format === 'link' && value && value !== '-' && String(value).startsWith('http')) {
                     const label = row.file_name || 'Lihat File';
-                    value = `<a href="${escapeHtml(value)}" target="_blank" class="file-link">📎 ${escapeHtml(label)}</a>`;
+                    value = `<a href="${escapeHtml(value)}" target="_blank" rel="noopener" class="file-link">${escapeHtml(label)}</a>`;
                 }
                 
-                // Format status badge
                 if (col.key === 'status') {
                     const statusClass = 
                         value === 'Lunas' ? 'status-lunas' :
@@ -171,7 +198,7 @@ function displayTable(vouchers) {
                     value = `<span class="status-badge ${statusClass}">${escapeHtml(value)}</span>`;
                 }
                 
-                return `<td>${value}</td>`;
+                return `<td>${value ?? '-'}</td>`;
             }).join('')}
         </tr>`;
     }).join('');
@@ -187,7 +214,7 @@ function displayTable(vouchers) {
             </tbody>
         </table>
         </div>
-        <p style="text-align: right; color: #666; margin-top: 10px; font-size: 0.9em;">
+        <p class="table-footer">
             Total: ${vouchers.length} data • Terakhir update: ${new Date().toLocaleString('id-ID')}
         </p>
     `;
@@ -196,27 +223,21 @@ function displayTable(vouchers) {
     container.style.display = 'block';
 }
 
-// Helper: Escape HTML untuk cegah XSS
+// Escape HTML
 function escapeHtml(text) {
     if (text === null || text === undefined) return '-';
     if (typeof text !== 'string') text = String(text);
-    const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-    };
+    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
-// Helper: Tampilkan/hide loading
+// Loading helper
 function showLoading(show) {
     const el = document.getElementById('loading');
     if (el) el.style.display = show ? 'block' : 'none';
 }
 
-// Helper: Tampilkan error
+// Error helper
 function showError(message) {
     const errorEl = document.getElementById('error');
     if (errorEl) {
@@ -225,7 +246,7 @@ function showError(message) {
     }
 }
 
-// Helper: Refresh data manual (bisa dipanggil dari button)
+// Refresh manual
 window.refreshData = function() {
     showLoading(true);
     document.getElementById('error').style.display = 'none';
