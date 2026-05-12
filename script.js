@@ -1,6 +1,6 @@
 // ===== KONFIGURASI =====
 // 🔹 Ganti dengan URL DEPLOYMENT BARU Anda
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyd2POlhgSzjdgJ1tYlq8JxRwJ9g2Oq8IDuB1jAObqLGdLi1XFNBdpceroV0GBRAyjk/exec?action=getVouchers';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw7bbX8yit6Y2mGgZ_zWVDduAKf60bVfYHMeEh_nj8TJ1kzu9p5f5HDS7ezUeVWADb5/exec';
 
 // Optional: Filter per company
 const COMPANY_FILTER = 'all';
