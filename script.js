@@ -2,6 +2,7 @@
 // FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.1)
 // ✅ Search, Filter, Export CSV, Auto-Refresh, Dark Mode
 // ✅ Manual Sync Trigger dengan Token Keamanan
+// ✅ Compatible with Code.gs v3.1
 // ═══════════════════════════════════════════════════════
 
 // ===== KONFIGURASI =====
@@ -38,16 +39,20 @@ function initTheme() {
     const saved = localStorage.getItem('theme');
     if (saved === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark');
-        document.getElementById('themeToggle').textContent = '☀️';
+        const toggle = document.getElementById('themeToggle');
+        if (toggle) toggle.textContent = '☀️';
     }
 }
 
-document.getElementById('themeToggle')?.addEventListener('click', () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    document.getElementById('themeToggle').textContent = isDark ? '🌓' : '☀️';
-    localStorage.setItem('theme', isDark ? 'light' : 'dark');
-});
+const themeToggle = document.getElementById('themeToggle');
+if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        themeToggle.textContent = isDark ? '🌓' : '☀️';
+        localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    });
+}
 
 // ═══════════════════════════════════════════════════════
 // 🔘 EVENT LISTENERS
@@ -55,40 +60,61 @@ document.getElementById('themeToggle')?.addEventListener('click', () => {
 
 function initEventListeners() {
     // 🔹 Refresh button (reload data)
-    document.getElementById('refreshBtn')?.addEventListener('click', () => {
-        clearFilters();
-        fetchData();
-    });
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            clearFilters();
+            fetchData();
+        });
+    }
     
     // 🔹 Sync button (trigger sync di Apps Script)
-    document.getElementById('syncBtn')?.addEventListener('click', triggerManualSync);
+    const syncBtn = document.getElementById('syncBtn');
+    if (syncBtn) {
+        syncBtn.addEventListener('click', triggerManualSync);
+    }
     
     // 🔹 Export CSV
-    document.getElementById('exportBtn')?.addEventListener('click', exportToCSV);
+    const exportBtn = document.getElementById('exportBtn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportToCSV);
+    }
     
     // 🔹 Auto-refresh toggle
-    document.getElementById('autoRefresh')?.addEventListener('change', (e) => {
-        toggleAutoRefresh(e.target.checked);
-    });
+    const autoRefresh = document.getElementById('autoRefresh');
+    if (autoRefresh) {
+        autoRefresh.addEventListener('change', (e) => {
+            toggleAutoRefresh(e.target.checked);
+        });
+    }
     
     // 🔹 Search input (debounced)
+    const searchInput = document.getElementById('searchInput');
     let searchTimeout;
-    document.getElementById('searchInput')?.addEventListener('input', (e) => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => applyFilters(), 300);
-    });
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => applyFilters(), 300);
+        });
+    }
     
     // 🔹 Company filter
-    document.getElementById('companyFilter')?.addEventListener('change', applyFilters);
+    const companyFilter = document.getElementById('companyFilter');
+    if (companyFilter) {
+        companyFilter.addEventListener('change', applyFilters);
+    }
     
     // 🔹 Date filters
-    document.getElementById('dateFrom')?.addEventListener('change', applyFilters);
-    document.getElementById('dateTo')?.addEventListener('change', applyFilters);
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    if (dateFrom) dateFrom.addEventListener('change', applyFilters);
+    if (dateTo) dateTo.addEventListener('change', applyFilters);
     
-    // 🔹 Table header sorting
+    // 🔹 Table header sorting (delegated event)
     document.addEventListener('click', (e) => {
-        if (e.target.closest('th[data-sort]')) {
-            const key = e.target.closest('th').dataset.sort;
+        const th = e.target.closest('th[data-sort]');
+        if (th) {
+            const key = th.dataset.sort;
             toggleSort(key);
         }
     });
@@ -125,11 +151,20 @@ async function triggerManualSync() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 detik timeout
         
+        // 🔹 IMPORTANT: Use text/plain for GAS CORS compatibility
         const response = await fetch(SYNC_TRIGGER_URL, {
             method: 'POST',
             mode: 'cors',
             signal: controller.signal,
-            headers: { 'Accept': 'application/json' }
+            headers: { 
+                'Content-Type': 'text/plain;charset=utf-8',
+                'Accept': 'application/json' 
+            },
+            body: JSON.stringify({
+                action: 'triggerSync',
+                token: 'Yudi0201',
+                timestamp: new Date().toISOString()
+            })
         });
         
         clearTimeout(timeoutId);
@@ -167,9 +202,11 @@ async function triggerManualSync() {
     } finally {
         // Re-enable button
         isSyncing = false;
-        syncBtn.disabled = false;
-        syncBtn.classList.remove('syncing');
-        syncBtn.innerHTML = '🔄 Sync Sekarang';
+        if (syncBtn) {
+            syncBtn.disabled = false;
+            syncBtn.classList.remove('syncing');
+            syncBtn.innerHTML = '🔄 Sync Sekarang';
+        }
         
         // Hide status after 6 seconds
         setTimeout(() => {
@@ -238,7 +275,7 @@ async function fetchData(retryCount = 0) {
             return fetchData(retryCount + 1);
         }
         
-        showError(`❌ Gagal mengambil  <br><small>${getFriendlyError(error.message)}</small>`);
+        showError(`❌ Gagal mengambil data <br><small>${getFriendlyError(error.message)}</small>`);
         
     } finally {
         showLoading(false);
@@ -250,18 +287,30 @@ async function fetchData(retryCount = 0) {
 // ═══════════════════════════════════════════════════════
 
 function applyFilters() {
-    const searchTerm = document.getElementById('searchInput')?.value?.toLowerCase() || '';
-    const companyFilter = document.getElementById('companyFilter')?.value || COMPANY_FILTER_DEFAULT;
-    const dateFrom = document.getElementById('dateFrom')?.value;
-    const dateTo = document.getElementById('dateTo')?.value;
+    const searchInput = document.getElementById('searchInput');
+    const companyFilterEl = document.getElementById('companyFilter');
+    const dateFromEl = document.getElementById('dateFrom');
+    const dateToEl = document.getElementById('dateTo');
+    
+    const searchTerm = searchInput?.value?.toLowerCase() || '';
+    const companyFilter = companyFilterEl?.value || COMPANY_FILTER_DEFAULT;
+    const dateFrom = dateFromEl?.value;
+    const dateTo = dateToEl?.value;
     
     filteredVouchers = allVouchers.filter(v => {
         // Company filter
         if (companyFilter !== 'all' && v.company !== companyFilter) return false;
         
-        // Search filter
+        // Search filter - ✅ PERBAIKAN: gunakan isi_invoice (bukan keterangan)
         if (searchTerm) {
-            const searchFields = [v.no_invoice, v.isi_invoice, v.lokasi, v.keterangan, v.dibayarkan].filter(Boolean).join(' ').toLowerCase();
+            const searchFields = [
+                v.no_invoice, 
+                v.isi_invoice,  // ← Field dari Code.gs
+                v.lokasi, 
+                v.jenis,
+                v.dibayarkan,
+                v.file_name
+            ].filter(Boolean).join(' ').toLowerCase();
             if (!searchFields.includes(searchTerm)) return false;
         }
         
@@ -456,9 +505,11 @@ function exportToCSV() {
     
     // Feedback
     const btn = document.getElementById('exportBtn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '✅ Terkirim!';
-    setTimeout(() => btn.innerHTML = originalText, 2000);
+    if (btn) {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '✅ Terkirim!';
+        setTimeout(() => btn.innerHTML = originalText, 2000);
+    }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -524,8 +575,13 @@ function showError(msg) {
 
 function showEmptyState(msg) {
     const el = document.getElementById('emptyState');
-    if (el) { el.querySelector('p').textContent = msg; el.style.display = 'block'; }
-    document.getElementById('tableContainer').style.display = 'none';
+    if (el) { 
+        const p = el.querySelector('p');
+        if (p) p.textContent = msg; 
+        el.style.display = 'block'; 
+    }
+    const tableContainer = document.getElementById('tableContainer');
+    if (tableContainer) tableContainer.style.display = 'none';
 }
 
 function showElements(ids, show) {
@@ -546,8 +602,12 @@ function updateLastSync() {
 }
 
 function clearFilters() {
-    document.getElementById('searchInput').value = '';
-    document.getElementById('companyFilter').value = COMPANY_FILTER_DEFAULT;
+    const searchInput = document.getElementById('searchInput');
+    const companyFilter = document.getElementById('companyFilter');
+    
+    if (searchInput) searchInput.value = '';
+    if (companyFilter) companyFilter.value = COMPANY_FILTER_DEFAULT;
+    
     initDateRange();
     applyFilters();
 }
