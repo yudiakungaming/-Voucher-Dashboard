@@ -7,7 +7,7 @@
 
 // ===== KONFIGURASI =====
 // 🔹 URL DEPLOY TERBARU (dari user)
-const BASE_URL = 'https://script.google.com/macros/s/AKfycbz_cygpqvLds2b5oose_RV_SaROJx1Kd8ExeGYw631-8i_J5-Y3YEk2QD171eTwLfUP/exec';
+const BASE_URL = 'https://script.google.com/macros/s/AKfycbwGE8DrVVhQdl9qfBNomx3E7OmO2j2pUwIHE83a7H7WM4es8RuSUqFjySQpiME9KTf8/exec';
 
 // 🔹 Cache-busting: timestamp unik per request
 const APPS_SCRIPT_URL = () => `${BASE_URL}?action=getVouchers&_t=${Date.now()}`;
