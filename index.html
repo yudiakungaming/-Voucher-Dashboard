@@ -51,13 +51,11 @@
                 <input type="text" id="searchInput" placeholder="Cari invoice, keterangan, lokasi...">
             </div>
             
-            <!-- Company Filter -->
+            <!-- Company Filter (Dinamis, hanya "Semua" sebagai default) -->
             <div class="control-group">
                 <label for="companyFilter">🏢 Perusahaan</label>
                 <select id="companyFilter">
                     <option value="all">Semua</option>
-                    <option value="nmsa">NMSA</option>
-                    <option value="ipn">IPN</option>
                 </select>
             </div>
             
@@ -73,8 +71,10 @@
             
             <!-- Actions -->
             <div class="control-group actions">
-                <button id="syncAllBtn" class="btn btn-warning">🔄 Sync All Companies</button>
-                <button id="refreshBtn" class="btn btn-primary">🔄 Refresh Data</button>
+                <!-- Tombol SyncAll disembunyikan karena fungsinya digabung ke Refresh -->
+                <button id="syncAllBtn" class="btn btn-warning" style="display:none;">🔄 Sync All Companies</button>
+                
+                <button id="refreshBtn" class="btn btn-primary" title="Sinkronisasi data terbaru & muat ulang">🔄 Refresh Data</button>
                 <button id="exportBtn" class="btn btn-secondary">📥 Export CSV</button>
                 <label class="toggle-switch" title="Auto-refresh setiap 5 menit">
                     <input type="checkbox" id="autoRefresh">
