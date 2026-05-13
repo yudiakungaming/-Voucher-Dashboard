@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════
-// FINANCE SYNC PRO - DASHBOARD SCRIPT (v4.0 - COMPLETE)
-// ✅ Semua fitur existing + Charts, Pagination, PWA, Advanced Filters
+// FINANCE SYNC PRO - DASHBOARD SCRIPT (v4.1 - FIXED)
+// ✅ Semua fitur + Charts, Pagination, PWA, Advanced Filters
+// ✅ FIX: Chart.js config, Pagination buttons, Favicon
 // ✅ CORS-safe fetch, Company detection fallback, Cache-busting
-// ✅ Compatible with Code.gs v3.2+
 // ═══════════════════════════════════════════════════════
 
 // ===== KONFIGURASI =====
@@ -14,8 +14,6 @@ const COMPANY_FILTER_DEFAULT = 'all';
 const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
 const SYNC_COOLDOWN = 5 * 60 * 1000;
 const CACHE_DURATION = 30000;
-
-// 🔥 NEW: Pagination config
 const DEFAULT_PAGE_SIZE = 50;
 
 // ===== STATE =====
@@ -26,16 +24,10 @@ let sortConfig = { key: 'tanggal', direction: 'desc' };
 let autoRefreshTimer = null;
 let isSyncing = false;
 let lastFetchTime = 0;
-
-// 🔥 NEW: Pagination state
 let currentPage = 1;
 let pageSize = DEFAULT_PAGE_SIZE;
 let totalPages = 1;
-
-// 🔥 NEW: Charts instances
 let charts = { status: null, company: null, trend: null };
-
-// 🔥 NEW: Offline/PWA state
 let isOnline = navigator.onLine;
 let cachedData = null;
 
@@ -74,15 +66,16 @@ if (themeToggle) {
 
 function updateChartTheme() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    Chart.defaults.color = isDark ? '#a0a0a0' : '#666666';
-    Chart.defaults.borderColor = isDark ? '#3a3a4e' : '#eeeeee';
+    if (typeof Chart !== 'undefined') {
+        Chart.defaults.color = isDark ? '#a0a0a0' : '#666666';
+        Chart.defaults.borderColor = isDark ? '#3a3a4e' : '#eeeeee';
+    }
 }
 
 // ═══════════════════════════════════════════════════════
 // 🔘 EVENT LISTENERS
 // ═══════════════════════════════════════════════════════
 function initEventListeners() {
-    // Refresh button
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
@@ -91,20 +84,17 @@ function initEventListeners() {
         });
     }
     
-    // Export buttons
     const exportBtn = document.getElementById('exportBtn');
     if (exportBtn) exportBtn.addEventListener('click', exportToCSV);
     
     const exportPdfBtn = document.getElementById('exportPdfBtn');
     if (exportPdfBtn) exportPdfBtn.addEventListener('click', exportToPDF);
     
-    // Auto-refresh toggle
     const autoRefresh = document.getElementById('autoRefresh');
     if (autoRefresh) {
         autoRefresh.addEventListener('change', (e) => toggleAutoRefresh(e.target.checked));
     }
     
-    // Search input (debounced)
     const searchInput = document.getElementById('searchInput');
     let searchTimeout;
     if (searchInput) {
@@ -114,30 +104,25 @@ function initEventListeners() {
         });
     }
     
-    // Company filter
     const companyFilter = document.getElementById('companyFilter');
     if (companyFilter) {
         companyFilter.addEventListener('change', () => { currentPage = 1; applyFilters(); });
     }
     
-    // 🔥 NEW: Status filter checkboxes
     document.querySelectorAll('.status-filter').forEach(cb => {
         cb.addEventListener('change', () => { currentPage = 1; applyFilters(); });
     });
     
-    // 🔥 NEW: Nominal range filters
     const nominalMin = document.getElementById('nominalMin');
     const nominalMax = document.getElementById('nominalMax');
     if (nominalMin) nominalMin.addEventListener('input', () => { currentPage = 1; applyFilters(); });
     if (nominalMax) nominalMax.addEventListener('input', () => { currentPage = 1; applyFilters(); });
     
-    // Date filters
     const dateFrom = document.getElementById('dateFrom');
     const dateTo = document.getElementById('dateTo');
     if (dateFrom) dateFrom.addEventListener('change', () => { currentPage = 1; applyFilters(); });
     if (dateTo) dateTo.addEventListener('change', () => { currentPage = 1; applyFilters(); });
     
-    // 🔥 NEW: Quick period buttons
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
@@ -146,13 +131,11 @@ function initEventListeners() {
         });
     });
     
-    // Table sorting
     document.addEventListener('click', (e) => {
         const th = e.target.closest('th[data-sort]');
         if (th) toggleSort(th.dataset.sort);
     });
     
-    // Sync notification close
     const syncCloseBtn = document.getElementById('syncCloseBtn');
     if (syncCloseBtn) {
         syncCloseBtn.addEventListener('click', () => {
@@ -160,7 +143,6 @@ function initEventListeners() {
         });
     }
     
-    // Manual sync link
     const manualSyncLink = document.getElementById('manualSyncLink');
     if (manualSyncLink) {
         manualSyncLink.addEventListener('click', (e) => {
@@ -169,10 +151,8 @@ function initEventListeners() {
         });
     }
     
-    // 🔥 NEW: Pagination controls
     setupPaginationListeners();
     
-    // Page size selector
     const pageSizeSelect = document.getElementById('pageSize');
     if (pageSizeSelect) {
         pageSizeSelect.addEventListener('change', (e) => {
@@ -182,7 +162,6 @@ function initEventListeners() {
         });
     }
     
-    // Online/offline detection
     window.addEventListener('online', () => {
         isOnline = true;
         updateOnlineStatus();
@@ -196,7 +175,7 @@ function initEventListeners() {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔥 NEW: PAGINATION LISTENERS
+// 🔥 PAGINATION LISTENERS (FIXED)
 // ═══════════════════════════════════════════════════════
 function setupPaginationListeners() {
     const buttons = [
@@ -220,12 +199,11 @@ function goToPage(page) {
     if (page < 1 || page > totalPages) return;
     currentPage = page;
     applyPagination();
-    // Scroll to table
     document.getElementById('tableContainer')?.scrollIntoView({ behavior: 'smooth' });
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔥 NEW: QUICK PERIOD HANDLER
+// 🔥 QUICK PERIOD HANDLER
 // ═══════════════════════════════════════════════════════
 function handleQuickPeriod(period) {
     const dateFrom = document.getElementById('dateFrom');
@@ -360,7 +338,6 @@ async function fetchData(force = false, retryCount = 0) {
         allVouchers = normalizeData(result);
         lastFetchTime = now;
         
-        // 🔥 NEW: Cache to IndexedDB for offline
         if (isOnline) await cacheDataToIndexedDB(allVouchers);
         
         if (allVouchers.length === 0) {
@@ -379,7 +356,6 @@ async function fetchData(force = false, retryCount = 0) {
     } catch (error) {
         console.error('❌ Fetch error:', error);
         
-        // 🔥 NEW: Try load from cache if offline
         if (!isOnline) {
             const cached = await getCachedDataFromIndexedDB();
             if (cached && cached.length > 0) {
@@ -416,12 +392,10 @@ async function fetchData(force = false, retryCount = 0) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔥 NEW: PWA / OFFLINE CACHE (IndexedDB)
+// 🔥 PWA / OFFLINE CACHE
 // ═══════════════════════════════════════════════════════
 async function initPWA() {
     updateOnlineStatus();
-    
-    // Register service worker if exists
     if ('serviceWorker' in navigator) {
         try {
             const registration = await navigator.serviceWorker.register('sw.js');
@@ -436,12 +410,10 @@ function updateOnlineStatus() {
     isOnline = navigator.onLine;
     const badge = document.getElementById('offlineBadge');
     const cacheStatus = document.getElementById('cacheStatus');
-    
     if (badge) badge.style.display = isOnline ? 'none' : 'inline';
     if (cacheStatus) cacheStatus.textContent = isOnline ? '💾 Cache: Aktif' : '📴 Offline Mode';
 }
 
-// IndexedDB helpers
 const DB_NAME = 'FinanceSyncDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'vouchers';
@@ -465,15 +437,10 @@ async function cacheDataToIndexedDB(data) {
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
-        
-        // Clear old data
         await store.clear();
-        
-        // Add new data
         for (const item of data) {
             await store.put(item);
         }
-        
         await tx.done;
         console.log('💾 Data cached to IndexedDB');
     } catch (err) {
@@ -486,7 +453,6 @@ async function getCachedDataFromIndexedDB() {
         const db = await openDB();
         const tx = db.transaction(STORE_NAME, 'readonly');
         const store = tx.objectStore(STORE_NAME);
-        
         return new Promise((resolve) => {
             const request = store.getAll();
             request.onsuccess = () => resolve(request.result);
@@ -504,21 +470,17 @@ async function getCachedDataFromIndexedDB() {
 function populateCompanyFilter(vouchers) {
     const select = document.getElementById('companyFilter');
     if (!select) return;
-    
     const currentSelection = select.value;
     select.innerHTML = '<option value="all">Semua</option>';
-    
     const companies = [...new Set(
         vouchers.map(v => v.company).filter(c => c && String(c).trim() !== '').map(c => String(c).trim().toLowerCase())
     )].sort((a, b) => a.localeCompare(b));
-    
     companies.forEach(company => {
         const option = document.createElement('option');
         option.value = company;
         option.textContent = company.toUpperCase();
         select.appendChild(option);
     });
-    
     if (currentSelection && currentSelection !== 'all') {
         const exists = Array.from(select.options).some(opt => opt.value === currentSelection.toLowerCase());
         if (exists) select.value = currentSelection.toLowerCase();
@@ -544,39 +506,25 @@ function applyFilters() {
     const dateFrom = dateFromEl?.value;
     const dateTo = dateToEl?.value;
     
-    // 🔥 NEW: Get selected statuses
     const selectedStatuses = Array.from(document.querySelectorAll('.status-filter:checked')).map(cb => cb.value);
-    
-    // 🔥 NEW: Get nominal range
     const nominalMin = parseFloat(document.getElementById('nominalMin')?.value) || 0;
     const nominalMax = parseFloat(document.getElementById('nominalMax')?.value) || Infinity;
     
     filteredVouchers = allVouchers.filter(v => {
-        // Company filter
         if (companyFilter !== 'all' && v.company?.toLowerCase() !== companyFilter.toLowerCase()) return false;
-        
-        // 🔥 NEW: Status filter
         if (selectedStatuses.length > 0 && !selectedStatuses.includes(v.status)) return false;
-        
-        // 🔥 NEW: Nominal range filter
         const nominal = parseFloat(v.nominal) || 0;
         if (nominal < nominalMin || nominal > nominalMax) return false;
-        
-        // Search filter
         if (searchTerm) {
             const searchFields = [v.no_invoice, v.isi_invoice, v.lokasi, v.jenis, v.dibayarkan, v.file_name]
                 .filter(Boolean).join(' ').toLowerCase();
             if (!searchFields.includes(searchTerm)) return false;
         }
-        
-        // Date filter
         if (dateFrom && v.tanggal < dateFrom) return false;
         if (dateTo && v.tanggal > dateTo) return false;
-        
         return true;
     });
     
-    // Sorting
     filteredVouchers.sort((a, b) => {
         const aVal = a[sortConfig.key] || '';
         const bVal = b[sortConfig.key] || '';
@@ -586,14 +534,9 @@ function applyFilters() {
         return String(aVal).localeCompare(String(bVal)) * modifier;
     });
     
-    // Update stats & charts
     updateStats(filteredVouchers);
     renderCharts(filteredVouchers);
-    
-    // 🔥 NEW: Apply pagination
     applyPagination();
-    
-    // Display table & update count
     displayTable(paginatedVouchers);
     updateFilteredCount();
     updatePaginationControls();
@@ -615,7 +558,7 @@ function toggleSort(key) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔥 NEW: PAGINATION LOGIC
+// 🔥 PAGINATION LOGIC (FIXED)
 // ═══════════════════════════════════════════════════════
 function applyPagination() {
     if (pageSize === Infinity || pageSize >= filteredVouchers.length) {
@@ -637,18 +580,23 @@ function updatePaginationControls() {
     document.getElementById('paginationBottom')?.style.setProperty('display', showPagination ? 'flex' : 'none');
     
     const info = `Menampilkan ${(currentPage-1)*pageSize+1}-${Math.min(currentPage*pageSize, filteredVouchers.length)} dari ${filteredVouchers.length} data`;
-    document.getElementById('paginationInfo')!.textContent = info;
-    document.getElementById('paginationInfoBottom')!.textContent = info;
+    const infoEl = document.getElementById('paginationInfo');
+    const infoElBottom = document.getElementById('paginationInfoBottom');
+    if (infoEl) infoEl.textContent = info;
+    if (infoElBottom) infoElBottom.textContent = info;
     
-    // Update button states
     const updateBtns = (prefix) => {
-        document.getElementById(`${prefix}firstPage`)!.disabled = currentPage === 1;
-        document.getElementById(`${prefix}prevPage`)!.disabled = currentPage === 1;
-        document.getElementById(`${prefix}nextPage`)!.disabled = currentPage === totalPages;
-        document.getElementById(`${prefix}lastPage`)!.disabled = currentPage === totalPages;
+        const first = document.getElementById(`${prefix}firstPage`);
+        const prev = document.getElementById(`${prefix}prevPage`);
+        const next = document.getElementById(`${prefix}nextPage`);
+        const last = document.getElementById(`${prefix}lastPage`);
+        if (first) first.disabled = currentPage === 1;
+        if (prev) prev.disabled = currentPage === 1;
+        if (next) next.disabled = currentPage === totalPages;
+        if (last) last.disabled = currentPage === totalPages;
     };
     updateBtns('');
-    updateBtns(''); // Bottom buttons use same IDs in this implementation
+    updateBtns('');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -684,14 +632,13 @@ function animateValue(elementId, value, isCurrency = false) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔥 NEW: CHARTS RENDERING
+// 🔥 CHARTS RENDERING (FIXED - data: property added)
 // ═══════════════════════════════════════════════════════
 function renderCharts(vouchers) {
     const chartsContainer = document.getElementById('chartsContainer');
     if (!chartsContainer) return;
     chartsContainer.style.display = vouchers.length > 0 ? 'grid' : 'none';
     if (vouchers.length === 0) { destroyCharts(); return; }
-    
     destroyCharts();
     renderStatusChart(vouchers);
     renderCompanyChart(vouchers);
@@ -867,15 +814,15 @@ function exportToCSV() {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔥 NEW: EXPORT PDF
+// 🔥 EXPORT PDF
 // ═══════════════════════════════════════════════════════
 function exportToPDF() {
     if (filteredVouchers.length === 0) { alert('Tidak ada data untuk di-export'); return; }
+    if (typeof window.jspdf === 'undefined') { alert('Library PDF belum loaded'); return; }
     
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('landscape', 'mm', 'a4');
     
-    // Header
     doc.setFontSize(16);
     doc.setTextColor(31, 78, 120);
     doc.text('FinanceSync Pro - Laporan Voucher', 14, 20);
@@ -883,9 +830,8 @@ function exportToPDF() {
     doc.setTextColor(102, 102, 102);
     doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')} • Total: ${filteredVouchers.length} voucher`, 14, 28);
     
-    // Table data
     const tableData = filteredVouchers.map(v => [
-        v.tanggal, v.no_invoice, v.company?.toUpperCase(), v.jenis, v.lokasi, 
+        v.tanggal, v.no_invoice, (v.company || '').toUpperCase(), v.jenis, v.lokasi, 
         formatRupiah(v.nominal), v.status, v.file_name || '-'
     ]);
     
@@ -899,7 +845,6 @@ function exportToPDF() {
         columnStyles: { 5: { halign: 'right' }, 6: { cellWidth: 25 } }
     });
     
-    // Footer
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -985,26 +930,18 @@ function clearFilters() {
     const companyFilter = document.getElementById('companyFilter');
     if (searchInput) searchInput.value = '';
     if (companyFilter) companyFilter.value = COMPANY_FILTER_DEFAULT;
-    
-    // Reset status filters
     document.querySelectorAll('.status-filter').forEach(cb => cb.checked = true);
-    
-    // Reset nominal filters
     const nominalMin = document.getElementById('nominalMin');
     const nominalMax = document.getElementById('nominalMax');
     if (nominalMin) nominalMin.value = '';
     if (nominalMax) nominalMax.value = '';
-    
-    // Reset to default period
     document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('.period-btn[data-period="month"]')?.classList.add('active');
-    
     initDateRange();
     currentPage = 1;
     applyFilters();
 }
 
-// Expose for HTML onclick
 window.clearFilters = clearFilters;
 window.refreshData = () => fetchData(true);
 window.forceReload = () => { localStorage.removeItem('theme'); window.location.reload(true); };
