@@ -8,8 +8,19 @@
     <!-- Link ke CSS terpisah -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- ✅ Favicon SVG yang benar -->
+    <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- jsPDF untuk Export PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#667eea">
     
     <!-- Cache Control Meta -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -25,6 +36,7 @@
             <div class="header-actions">
                 <a href="https://voucher-nmsa.up.railway.app" class="back-link" target="_blank">← Aplikasi Input</a>
                 <button id="themeToggle" class="icon-btn" title="Toggle Dark Mode">🌓</button>
+                <span id="offlineBadge" class="offline-badge" style="display:none;">📴 Offline</span>
             </div>
         </div>
         
@@ -48,6 +60,19 @@
             </div>
         </div>
         
+        <!-- CHARTS SECTION -->
+        <div class="charts-container" id="chartsContainer" style="display: none;">
+            <div class="chart-wrapper">
+                <canvas id="statusChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="companyChart"></canvas>
+            </div>
+            <div class="chart-wrapper chart-wide">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+        
         <!-- Filter & Controls Bar -->
         <div class="controls-bar">
             <!-- Search -->
@@ -56,7 +81,7 @@
                 <input type="text" id="searchInput" placeholder="Cari invoice, keterangan, lokasi...">
             </div>
             
-            <!-- Company Filter (Dinamis) -->
+            <!-- Company Filter -->
             <div class="control-group">
                 <label for="companyFilter">🏢 Perusahaan</label>
                 <select id="companyFilter">
@@ -64,9 +89,50 @@
                 </select>
             </div>
             
-            <!-- Date Range -->
+            <!-- 🔥 NEW: Status Multi-Select Filter -->
             <div class="control-group">
-                <label for="dateFrom">📅 Periode</label>
+                <label>✅ Status</label>
+                <div class="multi-select">
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="status-filter" value="Lunas" checked>
+                        <span>Lunas</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="status-filter" value="Belum" checked>
+                        <span>Belum</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="status-filter" value="Belum Lunas" checked>
+                        <span>Belum Lunas</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- 🔥 NEW: Nominal Range Filter -->
+            <div class="control-group">
+                <label>🔢 Range Nominal</label>
+                <div class="range-inputs">
+                    <input type="number" id="nominalMin" placeholder="Min" class="nominal-filter">
+                    <span>-</span>
+                    <input type="number" id="nominalMax" placeholder="Max" class="nominal-filter">
+                </div>
+            </div>
+            
+            <!-- 🔥 NEW: Quick Period Filter -->
+            <div class="control-group">
+                <label>📅 Quick Period</label>
+                <div class="quick-periods">
+                    <button class="period-btn" data-period="today">Hari Ini</button>
+                    <button class="period-btn" data-period="week">Minggu Ini</button>
+                    <button class="period-btn active" data-period="month">Bulan Ini</button>
+                    <button class="period-btn" data-period="year">Tahun Ini</button>
+                    <button class="period-btn" data-period="custom">Custom</button>
+                </div>
+            </div>
+            
+            <!-- Date Range (Custom) -->
+            <div class="control-group" id="customDateGroup">
+                <label for="dateFrom">📅 Periode Custom</label>
                 <div class="date-range">
                     <input type="date" id="dateFrom" title="Tanggal mulai">
                     <span>s/d</span>
@@ -76,8 +142,9 @@
             
             <!-- Actions -->
             <div class="control-group actions">
-                <button id="syncAllBtn" class="btn btn-warning" style="display:none;">🔄 Sync All Companies</button>
-                <button id="refreshBtn" class="btn btn-primary" title="Sinkronisasi data terbaru & muat ulang">🔄 Refresh Data</button>
+                <button id="syncAllBtn" class="btn btn-warning" style="display:none;">🔄 Sync All</button>
+                <button id="refreshBtn" class="btn btn-primary" title="Sinkronisasi data terbaru">🔄 Refresh</button>
+                <button id="exportPdfBtn" class="btn btn-secondary">📄 Export PDF</button>
                 <button id="exportBtn" class="btn btn-secondary">📥 Export CSV</button>
                 <label class="toggle-switch" title="Auto-refresh setiap 5 menit">
                     <input type="checkbox" id="autoRefresh">
@@ -106,17 +173,58 @@
                 <p>Tidak ada data yang sesuai dengan filter</p>
                 <button class="btn btn-small" onclick="clearFilters()">🔄 Reset Filter</button>
             </div>
+            
+            <!-- 🔥 NEW: Pagination Controls (Top) -->
+            <div class="pagination-controls" id="paginationTop" style="display:none;">
+                <span id="paginationInfo">Halaman 1 dari 1</span>
+                <div class="pagination-buttons">
+                    <button class="btn btn-small" id="firstPage" disabled>⏮ Pertama</button>
+                    <button class="btn btn-small" id="prevPage" disabled>◀ Sebelumnya</button>
+                    <select id="pageSize" class="page-size-select">
+                        <option value="25">25 / halaman</option>
+                        <option value="50" selected>50 / halaman</option>
+                        <option value="100">100 / halaman</option>
+                        <option value="all">Semua</option>
+                    </select>
+                    <button class="btn btn-small" id="nextPage" disabled>Selanjutnya ▶</button>
+                    <button class="btn btn-small" id="lastPage" disabled>Terakhir ⏭</button>
+                </div>
+            </div>
+            
             <div id="tableContainer"></div>
+            
+            <!-- 🔥 NEW: Pagination Controls (Bottom) -->
+            <div class="pagination-controls" id="paginationBottom" style="display:none;">
+                <span id="paginationInfoBottom">Halaman 1 dari 1</span>
+                <div class="pagination-buttons">
+                    <button class="btn btn-small" id="firstPageBottom" disabled>⏮ Pertama</button>
+                    <button class="btn btn-small" id="prevPageBottom" disabled>◀ Sebelumnya</button>
+                    <button class="btn btn-small" id="nextPageBottom" disabled>Selanjutnya ▶</button>
+                    <button class="btn btn-small" id="lastPageBottom" disabled>Terakhir ⏭</button>
+                </div>
+            </div>
         </div>
         
         <!-- Footer -->
         <div class="footer">
             <p>FinanceSync Pro Dashboard • Last sync: <span id="lastSync">-</span> • 
-               <a href="#" id="manualSyncLink">Sync Manual</a></p>
+               <a href="#" id="manualSyncLink">Sync Manual</a> • 
+               <span id="cacheStatus">💾 Cache: Aktif</span></p>
         </div>
     </div>
 
     <!-- Link ke JavaScript terpisah -->
-    <script src="script.js?v=3.4"></script>
+    <script src="script.js?v=4.0"></script>
+    
+    <!-- 🔥 NEW: Service Worker untuk PWA -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(() => {
+                console.log('✅ Service Worker registered');
+            }).catch(err => {
+                console.log('❌ Service Worker failed:', err);
+            });
+        }
+    </script>
 </body>
 </html>
