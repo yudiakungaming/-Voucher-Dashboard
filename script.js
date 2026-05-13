@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════════
-// FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.2)
-// ✅ Refresh digabung dengan Sync, Filter Company Dinamis
-// ✅ Search, Filter, Export CSV, Auto-Refresh, Dark Mode
-// ✅ Compatible with Code.gs v3.1
+// FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.3)
+// ✅ FIX: Cache-busting API, Filter company dinamis, 
+// ✅ Refresh digabung dengan Sync, Dark Mode, Export CSV
+// ✅ Compatible with Code.gs v3.1+
 // ═══════════════════════════════════════════════════════
 
 // ===== KONFIGURASI =====
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6dG2VCeD2cu5SxTS0sf5v7_nwKzsEqnzWAoLD_pV-t2Qih1a656gMKsyNUMZreF2d/exec?action=getVouchers';
-const SYNC_TRIGGER_URL = 'https://script.google.com/macros/s/AKfycbw6dG2VCeD2cu5SxTS0sf5v7_nwKzsEqnzWAoLD_pV-t2Qih1a656gMKsyNUMZreF2d/exec?action=triggerSync&token=Yudi0201';
+// 🔹 Tambahkan timestamp untuk bypass cache Apps Script
+const BASE_URL = 'https://script.google.com/macros/s/AKfycbw6dG2VCeD2cu5SxTS0sf5v7_nwKzsEqnzWAoLD_pV-t2Qih1a656gMKsyNUMZreF2d/exec';
+const APPS_SCRIPT_URL = BASE_URL + '?action=getVouchers&_t=' + Date.now();
+const SYNC_TRIGGER_URL = BASE_URL + '?action=triggerSync&token=Yudi0201&_t=' + Date.now();
 
 const COMPANY_FILTER_DEFAULT = 'all';
 const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 menit
@@ -19,12 +21,14 @@ let filteredVouchers = [];
 let sortConfig = { key: 'tanggal', direction: 'desc' };
 let autoRefreshTimer = null;
 let isSyncing = false;
+let lastFetchTime = 0;
+const CACHE_DURATION = 30000; // 30 detik minimal antara fetch
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initEventListeners();
-    fetchData();
+    fetchData(true); // force fetch on first load
 });
 
 // ═══════════════════════════════════════════════════════
@@ -53,7 +57,7 @@ if (themeToggle) {
 // 🔘 EVENT LISTENERS
 // ═══════════════════════════════════════════════════════
 function initEventListeners() {
-    // 🔹 Refresh button - SEKARANG memicu Sync + Fetch
+    // 🔹 Refresh button - memicu Sync + Fetch
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
@@ -109,10 +113,19 @@ function initEventListeners() {
             document.getElementById('syncNotification').style.display = 'none';
         });
     }
+    
+    // 🔹 Manual sync link in footer
+    const manualSyncLink = document.getElementById('manualSyncLink');
+    if (manualSyncLink) {
+        manualSyncLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            triggerManualSync();
+        });
+    }
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔄 MANUAL SYNC TRIGGER (Digabung ke Refresh)
+// 🔄 MANUAL SYNC TRIGGER
 // ═══════════════════════════════════════════════════════
 async function triggerManualSync() {
     const btn = document.getElementById('refreshBtn');
@@ -142,7 +155,10 @@ async function triggerManualSync() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 90000);
         
-        const response = await fetch(SYNC_TRIGGER_URL, {
+        // 🔹 Cache-busting: tambahkan timestamp
+        const url = SYNC_TRIGGER_URL.replace('_t=' + Date.now(), '_t=' + Date.now());
+        
+        const response = await fetch(url, {
             method: 'POST',
             mode: 'cors',
             signal: controller.signal,
@@ -166,8 +182,8 @@ async function triggerManualSync() {
         msgEl.textContent = '✅ Sinkronisasi selesai! Memuat data terbaru...';
         localStorage.setItem('lastManualSync', Date.now().toString());
         
-        // Auto fetch setelah sync sukses
-        setTimeout(() => fetchData(), 1500);
+        // ✅ Force fetch dengan bypass cache
+        setTimeout(() => fetchData(true), 1500);
         
     } catch (error) {
         console.error('❌ Sync error:', error);
@@ -176,8 +192,8 @@ async function triggerManualSync() {
         else if (errorMsg.includes('fetch') || errorMsg.includes('Network')) errorMsg = 'Gagal terhubung ke server. Cek koneksi.';
         
         msgEl.textContent = `❌ Gagal sync: ${errorMsg}`;
-        // Tetap coba fetch jika mungkin data baru sudah ada
-        setTimeout(() => fetchData(), 1000);
+        // Tetap coba fetch
+        setTimeout(() => fetchData(true), 1000);
         
     } finally {
         isSyncing = false;
@@ -190,9 +206,17 @@ async function triggerManualSync() {
 }
 
 // ═══════════════════════════════════════════════════════
-// 📡 FETCH DATA VOUCHER
+// 📡 FETCH DATA VOUCHER (dengan cache-busting)
 // ═══════════════════════════════════════════════════════
-async function fetchData(retryCount = 0) {
+async function fetchData(force = false, retryCount = 0) {
+    // 🔹 Cache control: jangan fetch terlalu sering
+    const now = Date.now();
+    if (!force && now - lastFetchTime < CACHE_DURATION && allVouchers.length > 0) {
+        console.log('⚡ Using cached data');
+        applyFilters();
+        return;
+    }
+    
     try {
         showLoading(true);
         showElements(['error', 'emptyState', 'tableContainer'], false);
@@ -200,11 +224,18 @@ async function fetchData(retryCount = 0) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         
-        const response = await fetch(APPS_SCRIPT_URL, {
+        // 🔹 Cache-busting: unique timestamp setiap request
+        const url = APPS_SCRIPT_URL.replace('_t=' + Date.now(), '_t=' + now);
+        
+        const response = await fetch(url, {
             method: 'GET',
             mode: 'cors',
             signal: controller.signal,
-            headers: { 'Accept': 'application/json' }
+            headers: { 
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            cache: 'no-store' // 🔹 Browser cache bypass
         });
         
         clearTimeout(timeoutId);
@@ -214,8 +245,11 @@ async function fetchData(retryCount = 0) {
         if (!result?.success) throw new Error(result?.message || 'Unknown error');
         
         allVouchers = normalizeData(result);
+        lastFetchTime = now; // update last fetch time
         
         if (allVouchers.length === 0) {
+            // ✅ Reset filter company jika tidak ada data
+            resetCompanyFilter();
             showEmptyState('⚠️ Tidak ada data voucher ditemukan');
             return;
         }
@@ -226,13 +260,13 @@ async function fetchData(retryCount = 0) {
         initDateRange();
         applyFilters();
         updateLastSync();
-        console.log(`✅ Loaded ${allVouchers.length} vouchers`);
+        console.log(`✅ Loaded ${allVouchers.length} vouchers at ${new Date().toLocaleTimeString()}`);
         
     } catch (error) {
         console.error('❌ Fetch error:', error);
         if (retryCount < 3 && (error.message.includes('fetch') || error.message.includes('CORS'))) {
             await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
-            return fetchData(retryCount + 1);
+            return fetchData(force, retryCount + 1);
         }
         showError(`❌ Gagal mengambil data <br><small>${getFriendlyError(error.message)}</small>`);
     } finally {
@@ -248,22 +282,41 @@ function populateCompanyFilter(vouchers) {
     if (!select) return;
     
     const currentSelection = select.value;
+    
+    // ✅ Reset total, hanya "Semua"
     select.innerHTML = '<option value="all">Semua</option>';
     
-    const companies = [...new Set(vouchers.map(v => v.company).filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b));
+    // ✅ Ambil unique companies, filter empty, lowercase untuk konsistensi
+    const companies = [...new Set(
+        vouchers
+            .map(v => v.company)
+            .filter(c => c && String(c).trim() !== '')
+            .map(c => String(c).trim().toLowerCase())
+    )].sort((a, b) => a.localeCompare(b));
     
     companies.forEach(company => {
         const option = document.createElement('option');
-        option.value = company.toLowerCase();
+        option.value = company;
+        // Tampilkan dengan format kapital
         option.textContent = company.toUpperCase();
         select.appendChild(option);
     });
     
-    // Restore selection jika masih valid
+    // ✅ Restore selection jika masih valid
     if (currentSelection && currentSelection !== 'all') {
-        const exists = Array.from(select.options).some(opt => opt.value === currentSelection);
-        if (exists) select.value = currentSelection;
+        const exists = Array.from(select.options).some(opt => opt.value === currentSelection.toLowerCase());
+        if (exists) select.value = currentSelection.toLowerCase();
+    }
+    
+    console.log(`🏢 Filter updated: ${companies.length} companies`);
+}
+
+// ✅ Helper: Reset filter ke default
+function resetCompanyFilter() {
+    const select = document.getElementById('companyFilter');
+    if (select) {
+        select.innerHTML = '<option value="all">Semua</option>';
+        select.value = 'all';
     }
 }
 
@@ -282,8 +335,10 @@ function applyFilters() {
     const dateTo = dateToEl?.value;
     
     filteredVouchers = allVouchers.filter(v => {
-        if (companyFilter !== 'all' && v.company !== companyFilter) return false;
+        // Company filter (case-insensitive)
+        if (companyFilter !== 'all' && v.company?.toLowerCase() !== companyFilter.toLowerCase()) return false;
         
+        // Search filter
         if (searchTerm) {
             const searchFields = [
                 v.no_invoice, v.isi_invoice, v.lokasi, v.jenis, v.dibayarkan, v.file_name
@@ -291,6 +346,7 @@ function applyFilters() {
             if (!searchFields.includes(searchTerm)) return false;
         }
         
+        // Date filter
         if (dateFrom && v.tanggal < dateFrom) return false;
         if (dateTo && v.tanggal > dateTo) return false;
         
@@ -463,7 +519,7 @@ function exportToCSV() {
 function toggleAutoRefresh(enabled) {
     if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
     if (enabled) {
-        autoRefreshTimer = setInterval(() => fetchData(), AUTO_REFRESH_INTERVAL);
+        autoRefreshTimer = setInterval(() => fetchData(false), AUTO_REFRESH_INTERVAL);
         console.log(`⏱️ Auto-refresh aktif: setiap ${AUTO_REFRESH_INTERVAL/60000} menit`);
     }
 }
@@ -477,11 +533,12 @@ function normalizeData(response) {
     else if (response?.success && Array.isArray(response.data)) raw = response.data;
     else if (response?.data && Array.isArray(response.data)) raw = response.data;
     
-    // Normalisasi data: pastikan company lowercase & trim
+    // Normalisasi: company lowercase & trim, nominal hanya angka
     return raw.map(item => ({
         ...item,
         company: item.company ? String(item.company).trim().toLowerCase() : '',
-        nominal: String(item.nominal || '').replace(/[^0-9.-]/g, '')
+        nominal: String(item.nominal || '').replace(/[^0-9.-]/g, '') || '0',
+        status: item.status ? String(item.status).trim() : 'Belum'
     }));
 }
 
@@ -523,5 +580,11 @@ function clearFilters() {
     applyFilters();
 }
 
+// Expose for HTML onclick
 window.clearFilters = clearFilters;
-window.refreshData = () => fetchData();
+window.refreshData = () => fetchData(true);
+window.forceReload = () => {
+    // Hard reload dari server
+    localStorage.removeItem('theme');
+    window.location.reload(true);
+};
