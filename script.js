@@ -1,21 +1,17 @@
 // ═══════════════════════════════════════════════════════
-// FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.1)
+// FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.2)
+// ✅ Refresh digabung dengan Sync, Filter Company Dinamis
 // ✅ Search, Filter, Export CSV, Auto-Refresh, Dark Mode
-// ✅ Manual Sync Trigger dengan Token Keamanan
 // ✅ Compatible with Code.gs v3.1
 // ═══════════════════════════════════════════════════════
 
 // ===== KONFIGURASI =====
-// 🔹 URL untuk ambil data voucher (read-only)
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw6dG2VCeD2cu5SxTS0sf5v7_nwKzsEqnzWAoLD_pV-t2Qih1a656gMKsyNUMZreF2d/exec?action=getVouchers';
-
-// 🔹 URL untuk trigger sync manual (dengan token keamanan)
 const SYNC_TRIGGER_URL = 'https://script.google.com/macros/s/AKfycbw6dG2VCeD2cu5SxTS0sf5v7_nwKzsEqnzWAoLD_pV-t2Qih1a656gMKsyNUMZreF2d/exec?action=triggerSync&token=Yudi0201';
 
-// 🔹 Konfigurasi lainnya
 const COMPANY_FILTER_DEFAULT = 'all';
 const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 menit
-const SYNC_COOLDOWN = 5 * 60 * 1000; // 5 menit cooldown untuk sync manual
+const SYNC_COOLDOWN = 5 * 60 * 1000; // 5 menit cooldown
 
 // ===== STATE =====
 let allVouchers = [];
@@ -34,7 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // ═══════════════════════════════════════════════════════
 // 🌓 THEME (DARK MODE)
 // ═══════════════════════════════════════════════════════
-
 function initTheme() {
     const saved = localStorage.getItem('theme');
     if (saved === 'dark') {
@@ -57,21 +52,14 @@ if (themeToggle) {
 // ═══════════════════════════════════════════════════════
 // 🔘 EVENT LISTENERS
 // ═══════════════════════════════════════════════════════
-
 function initEventListeners() {
-    // 🔹 Refresh button (reload data)
+    // 🔹 Refresh button - SEKARANG memicu Sync + Fetch
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
             clearFilters();
-            fetchData();
+            triggerManualSync();
         });
-    }
-    
-    // 🔹 Sync button (trigger sync di Apps Script)
-    const syncBtn = document.getElementById('syncBtn');
-    if (syncBtn) {
-        syncBtn.addEventListener('click', triggerManualSync);
     }
     
     // 🔹 Export CSV
@@ -83,9 +71,7 @@ function initEventListeners() {
     // 🔹 Auto-refresh toggle
     const autoRefresh = document.getElementById('autoRefresh');
     if (autoRefresh) {
-        autoRefresh.addEventListener('change', (e) => {
-            toggleAutoRefresh(e.target.checked);
-        });
+        autoRefresh.addEventListener('change', (e) => toggleAutoRefresh(e.target.checked));
     }
     
     // 🔹 Search input (debounced)
@@ -110,48 +96,52 @@ function initEventListeners() {
     if (dateFrom) dateFrom.addEventListener('change', applyFilters);
     if (dateTo) dateTo.addEventListener('change', applyFilters);
     
-    // 🔹 Table header sorting (delegated event)
+    // 🔹 Table header sorting
     document.addEventListener('click', (e) => {
         const th = e.target.closest('th[data-sort]');
-        if (th) {
-            const key = th.dataset.sort;
-            toggleSort(key);
-        }
+        if (th) toggleSort(th.dataset.sort);
     });
+
+    // 🔹 Close sync notification
+    const syncCloseBtn = document.getElementById('syncCloseBtn');
+    if (syncCloseBtn) {
+        syncCloseBtn.addEventListener('click', () => {
+            document.getElementById('syncNotification').style.display = 'none';
+        });
+    }
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔄 MANUAL SYNC TRIGGER
+// 🔄 MANUAL SYNC TRIGGER (Digabung ke Refresh)
 // ═══════════════════════════════════════════════════════
-
 async function triggerManualSync() {
-    const syncBtn = document.getElementById('syncBtn');
-    const statusEl = document.getElementById('syncStatus');
+    const btn = document.getElementById('refreshBtn');
+    const notif = document.getElementById('syncNotification');
+    const msgEl = document.getElementById('syncMessage');
     
-    if (!syncBtn || !statusEl || isSyncing) return;
+    if (!btn || !notif || isSyncing) return;
     
-    // 🔹 Cooldown check
+    // Cooldown check
     const lastSync = localStorage.getItem('lastManualSync');
     const now = Date.now();
     if (lastSync && (now - parseInt(lastSync)) < SYNC_COOLDOWN) {
         const remaining = Math.ceil((SYNC_COOLDOWN - (now - parseInt(lastSync))) / 1000);
-        showSyncStatus(`⏱️ Tunggu ${remaining} detik sebelum sync berikutnya`, 'info');
+        msgEl.textContent = `⏱️ Tunggu ${remaining} detik sebelum sync berikutnya`;
+        notif.style.display = 'block';
         return;
     }
     
-    // 🔹 Disable button & show loading
+    // UI Loading state
     isSyncing = true;
-    syncBtn.disabled = true;
-    syncBtn.classList.add('syncing');
-    syncBtn.innerHTML = '⏳ Syncing...';
-    
-    showSyncStatus('🔄 Memulai sinkronisasi... Mohon tunggu.', 'info');
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Syncing...';
+    msgEl.textContent = '🔄 Memulai sinkronisasi... Mohon tunggu.';
+    notif.style.display = 'block';
     
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 detik timeout
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
         
-        // 🔹 IMPORTANT: Use text/plain for GAS CORS compatibility
         const response = await fetch(SYNC_TRIGGER_URL, {
             method: 'POST',
             mode: 'cors',
@@ -168,66 +158,40 @@ async function triggerManualSync() {
         });
         
         clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const result = await response.json();
+        if (!result?.success) throw new Error(result?.message || 'Unknown error');
         
-        if (result?.success) {
-            showSyncStatus('✅ Sinkronisasi selesai! Data terbaru sudah tersedia.', 'success');
-            
-            // Auto-refresh data setelah sync sukses
-            setTimeout(() => {
-                fetchData();
-            }, 2000);
-            
-            // Update cooldown
-            localStorage.setItem('lastManualSync', Date.now().toString());
-            
-        } else {
-            throw new Error(result?.message || 'Unknown error');
-        }
+        msgEl.textContent = '✅ Sinkronisasi selesai! Memuat data terbaru...';
+        localStorage.setItem('lastManualSync', Date.now().toString());
+        
+        // Auto fetch setelah sync sukses
+        setTimeout(() => fetchData(), 1500);
         
     } catch (error) {
         console.error('❌ Sync error:', error);
         let errorMsg = error.message;
-        if (errorMsg.includes('Unauthorized')) {
-            errorMsg = 'Token tidak valid. Hubungi admin.';
-        } else if (errorMsg.includes('fetch') || errorMsg.includes('Network')) {
-            errorMsg = 'Tidak bisa terhubung ke server. Cek koneksi internet.';
-        }
-        showSyncStatus(`❌ Gagal sync: ${errorMsg}`, 'error');
-    } finally {
-        // Re-enable button
-        isSyncing = false;
-        if (syncBtn) {
-            syncBtn.disabled = false;
-            syncBtn.classList.remove('syncing');
-            syncBtn.innerHTML = '🔄 Sync Sekarang';
-        }
+        if (errorMsg.includes('Unauthorized')) errorMsg = 'Token tidak valid. Hubungi admin.';
+        else if (errorMsg.includes('fetch') || errorMsg.includes('Network')) errorMsg = 'Gagal terhubung ke server. Cek koneksi.';
         
-        // Hide status after 6 seconds
-        setTimeout(() => {
-            if (statusEl) statusEl.style.display = 'none';
-        }, 6000);
+        msgEl.textContent = `❌ Gagal sync: ${errorMsg}`;
+        // Tetap coba fetch jika mungkin data baru sudah ada
+        setTimeout(() => fetchData(), 1000);
+        
+    } finally {
+        isSyncing = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '🔄 Refresh Data';
+        }
+        setTimeout(() => { notif.style.display = 'none'; }, 6000);
     }
-}
-
-function showSyncStatus(message, type = 'info') {
-    const el = document.getElementById('syncStatus');
-    if (!el) return;
-    
-    el.innerHTML = message;
-    el.className = `sync-status ${type}`;
-    el.style.display = 'block';
 }
 
 // ═══════════════════════════════════════════════════════
 // 📡 FETCH DATA VOUCHER
 // ═══════════════════════════════════════════════════════
-
 async function fetchData(retryCount = 0) {
     try {
         showLoading(true);
@@ -244,11 +208,9 @@ async function fetchData(retryCount = 0) {
         });
         
         clearTimeout(timeoutId);
-        
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
         const result = await response.json();
-        
         if (!result?.success) throw new Error(result?.message || 'Unknown error');
         
         allVouchers = normalizeData(result);
@@ -258,34 +220,56 @@ async function fetchData(retryCount = 0) {
             return;
         }
         
-        // Set default date range to last 90 days
-        initDateRange();
+        // ✅ UPDATE: Populate filter company secara dinamis
+        populateCompanyFilter(allVouchers);
         
-        // Apply filters & render
+        initDateRange();
         applyFilters();
         updateLastSync();
-        
         console.log(`✅ Loaded ${allVouchers.length} vouchers`);
         
     } catch (error) {
         console.error('❌ Fetch error:', error);
-        
         if (retryCount < 3 && (error.message.includes('fetch') || error.message.includes('CORS'))) {
             await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
             return fetchData(retryCount + 1);
         }
-        
         showError(`❌ Gagal mengambil data <br><small>${getFriendlyError(error.message)}</small>`);
-        
     } finally {
         showLoading(false);
     }
 }
 
 // ═══════════════════════════════════════════════════════
+// 🏢 POPULATE COMPANY FILTER DINAMIS
+// ═══════════════════════════════════════════════════════
+function populateCompanyFilter(vouchers) {
+    const select = document.getElementById('companyFilter');
+    if (!select) return;
+    
+    const currentSelection = select.value;
+    select.innerHTML = '<option value="all">Semua</option>';
+    
+    const companies = [...new Set(vouchers.map(v => v.company).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b));
+    
+    companies.forEach(company => {
+        const option = document.createElement('option');
+        option.value = company.toLowerCase();
+        option.textContent = company.toUpperCase();
+        select.appendChild(option);
+    });
+    
+    // Restore selection jika masih valid
+    if (currentSelection && currentSelection !== 'all') {
+        const exists = Array.from(select.options).some(opt => opt.value === currentSelection);
+        if (exists) select.value = currentSelection;
+    }
+}
+
+// ═══════════════════════════════════════════════════════
 // 🔍 FILTER & SORT
 // ═══════════════════════════════════════════════════════
-
 function applyFilters() {
     const searchInput = document.getElementById('searchInput');
     const companyFilterEl = document.getElementById('companyFilter');
@@ -298,45 +282,32 @@ function applyFilters() {
     const dateTo = dateToEl?.value;
     
     filteredVouchers = allVouchers.filter(v => {
-        // Company filter
         if (companyFilter !== 'all' && v.company !== companyFilter) return false;
         
-        // Search filter - ✅ PERBAIKAN: gunakan isi_invoice (bukan keterangan)
         if (searchTerm) {
             const searchFields = [
-                v.no_invoice, 
-                v.isi_invoice,  // ← Field dari Code.gs
-                v.lokasi, 
-                v.jenis,
-                v.dibayarkan,
-                v.file_name
+                v.no_invoice, v.isi_invoice, v.lokasi, v.jenis, v.dibayarkan, v.file_name
             ].filter(Boolean).join(' ').toLowerCase();
             if (!searchFields.includes(searchTerm)) return false;
         }
         
-        // Date filter
         if (dateFrom && v.tanggal < dateFrom) return false;
         if (dateTo && v.tanggal > dateTo) return false;
         
         return true;
     });
     
-    // Apply sorting
+    // Sorting
     filteredVouchers.sort((a, b) => {
         const aVal = a[sortConfig.key] || '';
         const bVal = b[sortConfig.key] || '';
         const modifier = sortConfig.direction === 'asc' ? 1 : -1;
         
-        if (sortConfig.key === 'nominal') {
-            return (parseFloat(aVal) - parseFloat(bVal)) * modifier;
-        }
-        if (sortConfig.key === 'tanggal') {
-            return (new Date(aVal) - new Date(bVal)) * modifier;
-        }
+        if (sortConfig.key === 'nominal') return (parseFloat(aVal) - parseFloat(bVal)) * modifier;
+        if (sortConfig.key === 'tanggal') return (new Date(aVal) - new Date(bVal)) * modifier;
         return String(aVal).localeCompare(String(bVal)) * modifier;
     });
     
-    // Update UI
     updateStats(filteredVouchers);
     displayTable(filteredVouchers);
     updateFilteredCount();
@@ -350,21 +321,16 @@ function toggleSort(key) {
         sortConfig.direction = key === 'tanggal' ? 'desc' : 'asc';
     }
     
-    // Update header visual
     document.querySelectorAll('th[data-sort]').forEach(th => {
         th.classList.remove('sort-asc', 'sort-desc');
-        if (th.dataset.sort === sortConfig.key) {
-            th.classList.add(`sort-${sortConfig.direction}`);
-        }
+        if (th.dataset.sort === sortConfig.key) th.classList.add(`sort-${sortConfig.direction}`);
     });
-    
     applyFilters();
 }
 
 // ═══════════════════════════════════════════════════════
 // 📅 DATE RANGE
 // ═══════════════════════════════════════════════════════
-
 function initDateRange() {
     const today = new Date();
     const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
@@ -379,7 +345,6 @@ function initDateRange() {
 // ═══════════════════════════════════════════════════════
 // 📊 STATS
 // ═══════════════════════════════════════════════════════
-
 function updateStats(vouchers) {
     const total = vouchers.length;
     const totalNominal = vouchers.reduce((sum, v) => sum + (parseFloat(v.nominal) || 0), 0);
@@ -401,7 +366,6 @@ function animateValue(elementId, value, isCurrency = false) {
 // ═══════════════════════════════════════════════════════
 // 📋 TABLE
 // ═══════════════════════════════════════════════════════
-
 function displayTable(vouchers) {
     const container = document.getElementById('tableContainer');
     if (!container) return;
@@ -424,30 +388,22 @@ function displayTable(vouchers) {
         { key: 'file_url', label: 'File', format: 'link' }
     ];
     
-    const headerHTML = columns.map(col => 
-        `<th ${col.sortable ? `data-sort="${col.key}"` : ''}>${col.label}</th>`
-    ).join('');
+    const headerHTML = columns.map(col => `<th ${col.sortable ? `data-sort="${col.key}"` : ''}>${col.label}</th>`).join('');
     
     const rowsHTML = vouchers.map(row => `
         <tr>
             ${columns.map(col => {
                 let value = row[col.key] ?? '-';
-                
-                if (col.format === 'currency' && value !== '-' && value !== '') {
-                    value = formatRupiah(value);
-                }
-                
+                if (col.format === 'currency' && value !== '-' && value !== '') value = formatRupiah(value);
                 if (col.format === 'link' && value?.startsWith('http')) {
                     const label = row.file_name || 'Lihat File';
                     value = `<a href="${escapeHtml(value)}" target="_blank" rel="noopener" class="file-link">${escapeHtml(label)}</a>`;
                 }
-                
                 if (col.key === 'status') {
                     const cls = value === 'Lunas' ? 'status-lunas' : 
                                ['Belum', 'Belum Lunas'].includes(value) ? 'status-belum' : 'status-other';
                     value = `<span class="status-badge ${cls}">${escapeHtml(value)}</span>`;
                 }
-                
                 return `<td>${value ?? '-'}</td>`;
             }).join('')}
         </tr>
@@ -460,36 +416,26 @@ function displayTable(vouchers) {
             <tbody>${rowsHTML}</tbody>
         </table>
         </div>
-        <p class="table-footer">
-            Menampilkan ${vouchers.length} dari ${allVouchers.length} data • Update: ${new Date().toLocaleString('id-ID')}
-        </p>
+        <p class="table-footer">Menampilkan ${vouchers.length} dari ${allVouchers.length} data • Update: ${new Date().toLocaleString('id-ID')}</p>
     `;
-    
     container.style.display = 'block';
 }
 
 // ═══════════════════════════════════════════════════════
 // 📥 EXPORT CSV
 // ═══════════════════════════════════════════════════════
-
 function exportToCSV() {
-    if (filteredVouchers.length === 0) {
-        alert('Tidak ada data untuk di-export');
-        return;
-    }
+    if (filteredVouchers.length === 0) { alert('Tidak ada data untuk di-export'); return; }
     
     const columns = ['tanggal', 'no_invoice', 'company', 'jenis', 'lokasi', 'isi_invoice', 'nominal', 'status', 'dibayarkan', 'file_url'];
     const headers = ['Tanggal', 'No Invoice', 'Company', 'Jenis', 'Lokasi', 'Keterangan', 'Nominal', 'Status', 'Dibayarkan', 'Link File'];
     
     let csv = headers.join(',') + '\n';
-    
     filteredVouchers.forEach(row => {
         const values = columns.map(col => {
             let val = row[col] ?? '';
             if (col === 'nominal') val = parseFloat(val) || 0;
-            if (String(val).includes(',') || String(val).includes('"')) {
-                val = `"${String(val).replace(/"/g, '""')}"`;
-            }
+            if (String(val).includes(',') || String(val).includes('"')) val = `"${String(val).replace(/"/g, '""')}"`;
             return val;
         });
         csv += values.join(',') + '\n';
@@ -503,7 +449,6 @@ function exportToCSV() {
     link.click();
     URL.revokeObjectURL(url);
     
-    // Feedback
     const btn = document.getElementById('exportBtn');
     if (btn) {
         const originalText = btn.innerHTML;
@@ -515,18 +460,10 @@ function exportToCSV() {
 // ═══════════════════════════════════════════════════════
 // 🔄 AUTO-REFRESH
 // ═══════════════════════════════════════════════════════
-
 function toggleAutoRefresh(enabled) {
-    if (autoRefreshTimer) {
-        clearInterval(autoRefreshTimer);
-        autoRefreshTimer = null;
-    }
-    
+    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
     if (enabled) {
-        autoRefreshTimer = setInterval(() => {
-            console.log('🔄 Auto-refresh...');
-            fetchData();
-        }, AUTO_REFRESH_INTERVAL);
+        autoRefreshTimer = setInterval(() => fetchData(), AUTO_REFRESH_INTERVAL);
         console.log(`⏱️ Auto-refresh aktif: setiap ${AUTO_REFRESH_INTERVAL/60000} menit`);
     }
 }
@@ -534,12 +471,18 @@ function toggleAutoRefresh(enabled) {
 // ═══════════════════════════════════════════════════════
 // 🔧 UTILITIES
 // ═══════════════════════════════════════════════════════
-
 function normalizeData(response) {
-    if (Array.isArray(response)) return response;
-    if (response?.success && Array.isArray(response.data)) return response.data;
-    if (response?.data && Array.isArray(response.data)) return response.data;
-    return [];
+    let raw = [];
+    if (Array.isArray(response)) raw = response;
+    else if (response?.success && Array.isArray(response.data)) raw = response.data;
+    else if (response?.data && Array.isArray(response.data)) raw = response.data;
+    
+    // Normalisasi data: pastikan company lowercase & trim
+    return raw.map(item => ({
+        ...item,
+        company: item.company ? String(item.company).trim().toLowerCase() : '',
+        nominal: String(item.nominal || '').replace(/[^0-9.-]/g, '')
+    }));
 }
 
 function formatRupiah(angka) {
@@ -554,64 +497,31 @@ function escapeHtml(text) {
 }
 
 function getFriendlyError(msg) {
-    if (msg.includes('fetch') || msg.includes('Network')) {
-        return 'Tidak bisa terhubung ke server.<br>• Cek koneksi internet<br>• Pastikan Apps Script sudah di-deploy';
-    }
-    if (msg.includes('CORS')) {
-        return 'Error CORS.<br>• Re-deploy Apps Script sebagai "New deployment"<br>• Set "Who has access: Anyone"';
-    }
+    if (msg.includes('fetch') || msg.includes('Network')) return 'Tidak bisa terhubung ke server.<br>• Cek koneksi internet<br>• Pastikan Apps Script sudah di-deploy';
+    if (msg.includes('CORS')) return 'Error CORS.<br>• Re-deploy Apps Script sebagai "New deployment"<br>• Set "Who has access: Anyone"';
     return msg;
 }
 
-function showLoading(show) {
-    const el = document.getElementById('loading');
-    if (el) el.style.display = show ? 'block' : 'none';
-}
-
-function showError(msg) {
-    const el = document.getElementById('error');
-    if (el) { el.innerHTML = msg; el.style.display = 'block'; }
-}
-
-function showEmptyState(msg) {
+function showLoading(show) { const el = document.getElementById('loading'); if (el) el.style.display = show ? 'block' : 'none'; }
+function showError(msg) { const el = document.getElementById('error'); if (el) { el.innerHTML = msg; el.style.display = 'block'; } }
+function showEmptyState(msg) { 
     const el = document.getElementById('emptyState');
-    if (el) { 
-        const p = el.querySelector('p');
-        if (p) p.textContent = msg; 
-        el.style.display = 'block'; 
-    }
+    if (el) { const p = el.querySelector('p'); if (p) p.textContent = msg; el.style.display = 'block'; }
     const tableContainer = document.getElementById('tableContainer');
     if (tableContainer) tableContainer.style.display = 'none';
 }
-
-function showElements(ids, show) {
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = show ? 'block' : 'none';
-    });
-}
-
-function updateFilteredCount() {
-    const el = document.getElementById('filteredCount');
-    if (el) el.textContent = `${filteredVouchers.length} data`;
-}
-
-function updateLastSync() {
-    const el = document.getElementById('lastSync');
-    if (el) el.textContent = new Date().toLocaleString('id-ID');
-}
+function showElements(ids, show) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = show ? 'block' : 'none'; }); }
+function updateFilteredCount() { const el = document.getElementById('filteredCount'); if (el) el.textContent = `${filteredVouchers.length} data`; }
+function updateLastSync() { const el = document.getElementById('lastSync'); if (el) el.textContent = new Date().toLocaleString('id-ID'); }
 
 function clearFilters() {
     const searchInput = document.getElementById('searchInput');
     const companyFilter = document.getElementById('companyFilter');
-    
     if (searchInput) searchInput.value = '';
     if (companyFilter) companyFilter.value = COMPANY_FILTER_DEFAULT;
-    
     initDateRange();
     applyFilters();
 }
 
-// Expose for HTML onclick
 window.clearFilters = clearFilters;
 window.refreshData = () => fetchData();
