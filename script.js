@@ -1,15 +1,17 @@
 // ═══════════════════════════════════════════════════════
-// FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.3)
-// ✅ FIX: Cache-busting API, Filter company dinamis, 
-// ✅ Refresh digabung dengan Sync, Dark Mode, Export CSV
+// FINANCE SYNC PRO - DASHBOARD SCRIPT (v3.4 - FINAL)
+// ✅ FIX: CORS-safe fetch, URL deploy terbaru, cache-busting
+// ✅ Filter company dinamis, Refresh digabung Sync
 // ✅ Compatible with Code.gs v3.1+
 // ═══════════════════════════════════════════════════════
 
 // ===== KONFIGURASI =====
-// 🔹 Tambahkan timestamp untuk bypass cache Apps Script
-const BASE_URL = 'https://script.google.com/macros/s/AKfycbw6dG2VCeD2cu5SxTS0sf5v7_nwKzsEqnzWAoLD_pV-t2Qih1a656gMKsyNUMZreF2d/exec';
-const APPS_SCRIPT_URL = BASE_URL + '?action=getVouchers&_t=' + Date.now();
-const SYNC_TRIGGER_URL = BASE_URL + '?action=triggerSync&token=Yudi0201&_t=' + Date.now();
+// 🔹 URL DEPLOY TERBARU (dari user)
+const BASE_URL = 'https://script.google.com/macros/s/AKfycbw9P0A9R28-3DZITxIGwxgW_Ieu35zLH6fBW-YVnt78Amhq5XM7k4IXdzx7We-3bB9o/exec';
+
+// 🔹 Cache-busting: timestamp unik per request
+const APPS_SCRIPT_URL = () => `${BASE_URL}?action=getVouchers&_t=${Date.now()}`;
+const SYNC_TRIGGER_URL = () => `${BASE_URL}?action=triggerSync&token=Yudi0201&_t=${Date.now()}`;
 
 const COMPANY_FILTER_DEFAULT = 'all';
 const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 menit
@@ -57,7 +59,6 @@ if (themeToggle) {
 // 🔘 EVENT LISTENERS
 // ═══════════════════════════════════════════════════════
 function initEventListeners() {
-    // 🔹 Refresh button - memicu Sync + Fetch
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) {
         refreshBtn.addEventListener('click', () => {
@@ -66,19 +67,16 @@ function initEventListeners() {
         });
     }
     
-    // 🔹 Export CSV
     const exportBtn = document.getElementById('exportBtn');
     if (exportBtn) {
         exportBtn.addEventListener('click', exportToCSV);
     }
     
-    // 🔹 Auto-refresh toggle
     const autoRefresh = document.getElementById('autoRefresh');
     if (autoRefresh) {
         autoRefresh.addEventListener('change', (e) => toggleAutoRefresh(e.target.checked));
     }
     
-    // 🔹 Search input (debounced)
     const searchInput = document.getElementById('searchInput');
     let searchTimeout;
     if (searchInput) {
@@ -88,25 +86,21 @@ function initEventListeners() {
         });
     }
     
-    // 🔹 Company filter
     const companyFilter = document.getElementById('companyFilter');
     if (companyFilter) {
         companyFilter.addEventListener('change', applyFilters);
     }
     
-    // 🔹 Date filters
     const dateFrom = document.getElementById('dateFrom');
     const dateTo = document.getElementById('dateTo');
     if (dateFrom) dateFrom.addEventListener('change', applyFilters);
     if (dateTo) dateTo.addEventListener('change', applyFilters);
     
-    // 🔹 Table header sorting
     document.addEventListener('click', (e) => {
         const th = e.target.closest('th[data-sort]');
         if (th) toggleSort(th.dataset.sort);
     });
 
-    // 🔹 Close sync notification
     const syncCloseBtn = document.getElementById('syncCloseBtn');
     if (syncCloseBtn) {
         syncCloseBtn.addEventListener('click', () => {
@@ -114,7 +108,6 @@ function initEventListeners() {
         });
     }
     
-    // 🔹 Manual sync link in footer
     const manualSyncLink = document.getElementById('manualSyncLink');
     if (manualSyncLink) {
         manualSyncLink.addEventListener('click', (e) => {
@@ -125,7 +118,7 @@ function initEventListeners() {
 }
 
 // ═══════════════════════════════════════════════════════
-// 🔄 MANUAL SYNC TRIGGER
+// 🔄 MANUAL SYNC TRIGGER - CORS-SAFE
 // ═══════════════════════════════════════════════════════
 async function triggerManualSync() {
     const btn = document.getElementById('refreshBtn');
@@ -134,7 +127,6 @@ async function triggerManualSync() {
     
     if (!btn || !notif || isSyncing) return;
     
-    // Cooldown check
     const lastSync = localStorage.getItem('lastManualSync');
     const now = Date.now();
     if (lastSync && (now - parseInt(lastSync)) < SYNC_COOLDOWN) {
@@ -144,7 +136,6 @@ async function triggerManualSync() {
         return;
     }
     
-    // UI Loading state
     isSyncing = true;
     btn.disabled = true;
     btn.innerHTML = '⏳ Syncing...';
@@ -155,16 +146,13 @@ async function triggerManualSync() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 90000);
         
-        // 🔹 Cache-busting: tambahkan timestamp
-        const url = SYNC_TRIGGER_URL.replace('_t=' + Date.now(), '_t=' + Date.now());
-        
-        const response = await fetch(url, {
+        // 🔹 CORS-SAFE POST: Content-Type text/plain TIDAK trigger preflight
+        const response = await fetch(SYNC_TRIGGER_URL(), {
             method: 'POST',
-            mode: 'cors',
             signal: controller.signal,
             headers: { 
-                'Content-Type': 'text/plain;charset=utf-8',
-                'Accept': 'application/json' 
+                'Content-Type': 'text/plain;charset=utf-8'
+                // ❌ JANGAN tambahkan 'Accept' atau header lain yang trigger preflight
             },
             body: JSON.stringify({
                 action: 'triggerSync',
@@ -182,7 +170,6 @@ async function triggerManualSync() {
         msgEl.textContent = '✅ Sinkronisasi selesai! Memuat data terbaru...';
         localStorage.setItem('lastManualSync', Date.now().toString());
         
-        // ✅ Force fetch dengan bypass cache
         setTimeout(() => fetchData(true), 1500);
         
     } catch (error) {
@@ -192,7 +179,6 @@ async function triggerManualSync() {
         else if (errorMsg.includes('fetch') || errorMsg.includes('Network')) errorMsg = 'Gagal terhubung ke server. Cek koneksi.';
         
         msgEl.textContent = `❌ Gagal sync: ${errorMsg}`;
-        // Tetap coba fetch
         setTimeout(() => fetchData(true), 1000);
         
     } finally {
@@ -206,10 +192,9 @@ async function triggerManualSync() {
 }
 
 // ═══════════════════════════════════════════════════════
-// 📡 FETCH DATA VOUCHER (dengan cache-busting)
+// 📡 FETCH DATA - CORS-SAFE GET (TANPA PREFLIGHT)
 // ═══════════════════════════════════════════════════════
 async function fetchData(force = false, retryCount = 0) {
-    // 🔹 Cache control: jangan fetch terlalu sering
     const now = Date.now();
     if (!force && now - lastFetchTime < CACHE_DURATION && allVouchers.length > 0) {
         console.log('⚡ Using cached data');
@@ -224,18 +209,12 @@ async function fetchData(force = false, retryCount = 0) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
         
-        // 🔹 Cache-busting: unique timestamp setiap request
-        const url = APPS_SCRIPT_URL.replace('_t=' + Date.now(), '_t=' + now);
-        
-        const response = await fetch(url, {
+        // 🔹 CORS-SAFE GET: Minimal config, NO custom headers yang trigger preflight
+        const response = await fetch(APPS_SCRIPT_URL(), {
             method: 'GET',
-            mode: 'cors',
-            signal: controller.signal,
-            headers: { 
-                'Accept': 'application/json',
-                'Cache-Control': 'no-cache'
-            },
-            cache: 'no-store' // 🔹 Browser cache bypass
+            signal: controller.signal
+            // ❌ JANGAN pakai: mode:'cors', headers:{'Accept':...}, cache:'no-store'
+            // ✅ Apps Script Web App sudah otomatis return CORS header jika "Who has access: Anyone"
         });
         
         clearTimeout(timeoutId);
@@ -245,30 +224,43 @@ async function fetchData(force = false, retryCount = 0) {
         if (!result?.success) throw new Error(result?.message || 'Unknown error');
         
         allVouchers = normalizeData(result);
-        lastFetchTime = now; // update last fetch time
+        lastFetchTime = now;
         
         if (allVouchers.length === 0) {
-            // ✅ Reset filter company jika tidak ada data
             resetCompanyFilter();
             showEmptyState('⚠️ Tidak ada data voucher ditemukan');
             return;
         }
         
-        // ✅ UPDATE: Populate filter company secara dinamis
         populateCompanyFilter(allVouchers);
-        
         initDateRange();
         applyFilters();
         updateLastSync();
-        console.log(`✅ Loaded ${allVouchers.length} vouchers at ${new Date().toLocaleTimeString()}`);
+        console.log(`✅ Loaded ${allVouchers.length} vouchers`);
         
     } catch (error) {
         console.error('❌ Fetch error:', error);
+        
         if (retryCount < 3 && (error.message.includes('fetch') || error.message.includes('CORS'))) {
             await new Promise(r => setTimeout(r, 1000 * (retryCount + 1)));
             return fetchData(force, retryCount + 1);
         }
-        showError(`❌ Gagal mengambil data <br><small>${getFriendlyError(error.message)}</small>`);
+        
+        if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+            showError(`❌ Error koneksi ke server<br>
+                <small>
+                <b>Penyebab:</b> Deployment Apps Script belum akses "Anyone"<br><br>
+                <b>Solusi:</b><br>
+                1. Buka Apps Script → Deploy → Manage deployments<br>
+                2. Klik ✏️ pada deployment aktif<br>
+                3. Set <b>Who has access: Anyone</b><br>
+                4. Klik "Deploy" → "New deployment"<br>
+                5. Copy URL baru → update BASE_URL di script.js<br>
+                6. Hard refresh browser: Ctrl+Shift+R
+                </small>`);
+        } else {
+            showError(`❌ Gagal mengambil data <br><small>${getFriendlyError(error.message)}</small>`);
+        }
     } finally {
         showLoading(false);
     }
@@ -282,11 +274,8 @@ function populateCompanyFilter(vouchers) {
     if (!select) return;
     
     const currentSelection = select.value;
-    
-    // ✅ Reset total, hanya "Semua"
     select.innerHTML = '<option value="all">Semua</option>';
     
-    // ✅ Ambil unique companies, filter empty, lowercase untuk konsistensi
     const companies = [...new Set(
         vouchers
             .map(v => v.company)
@@ -297,21 +286,16 @@ function populateCompanyFilter(vouchers) {
     companies.forEach(company => {
         const option = document.createElement('option');
         option.value = company;
-        // Tampilkan dengan format kapital
         option.textContent = company.toUpperCase();
         select.appendChild(option);
     });
     
-    // ✅ Restore selection jika masih valid
     if (currentSelection && currentSelection !== 'all') {
         const exists = Array.from(select.options).some(opt => opt.value === currentSelection.toLowerCase());
         if (exists) select.value = currentSelection.toLowerCase();
     }
-    
-    console.log(`🏢 Filter updated: ${companies.length} companies`);
 }
 
-// ✅ Helper: Reset filter ke default
 function resetCompanyFilter() {
     const select = document.getElementById('companyFilter');
     if (select) {
@@ -335,10 +319,8 @@ function applyFilters() {
     const dateTo = dateToEl?.value;
     
     filteredVouchers = allVouchers.filter(v => {
-        // Company filter (case-insensitive)
         if (companyFilter !== 'all' && v.company?.toLowerCase() !== companyFilter.toLowerCase()) return false;
         
-        // Search filter
         if (searchTerm) {
             const searchFields = [
                 v.no_invoice, v.isi_invoice, v.lokasi, v.jenis, v.dibayarkan, v.file_name
@@ -346,14 +328,12 @@ function applyFilters() {
             if (!searchFields.includes(searchTerm)) return false;
         }
         
-        // Date filter
         if (dateFrom && v.tanggal < dateFrom) return false;
         if (dateTo && v.tanggal > dateTo) return false;
         
         return true;
     });
     
-    // Sorting
     filteredVouchers.sort((a, b) => {
         const aVal = a[sortConfig.key] || '';
         const bVal = b[sortConfig.key] || '';
@@ -533,7 +513,6 @@ function normalizeData(response) {
     else if (response?.success && Array.isArray(response.data)) raw = response.data;
     else if (response?.data && Array.isArray(response.data)) raw = response.data;
     
-    // Normalisasi: company lowercase & trim, nominal hanya angka
     return raw.map(item => ({
         ...item,
         company: item.company ? String(item.company).trim().toLowerCase() : '',
@@ -580,11 +559,9 @@ function clearFilters() {
     applyFilters();
 }
 
-// Expose for HTML onclick
 window.clearFilters = clearFilters;
 window.refreshData = () => fetchData(true);
 window.forceReload = () => {
-    // Hard reload dari server
     localStorage.removeItem('theme');
     window.location.reload(true);
 };
