@@ -10,6 +10,11 @@
     
     <!-- Favicon sederhana -->
     <link rel="icon" href="image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+    
+    <!-- Cache Control Meta -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
 </head>
 <body>
     <div class="container">
@@ -51,7 +56,7 @@
                 <input type="text" id="searchInput" placeholder="Cari invoice, keterangan, lokasi...">
             </div>
             
-            <!-- Company Filter (Dinamis, hanya "Semua" sebagai default) -->
+            <!-- Company Filter (Dinamis) -->
             <div class="control-group">
                 <label for="companyFilter">🏢 Perusahaan</label>
                 <select id="companyFilter">
@@ -71,9 +76,7 @@
             
             <!-- Actions -->
             <div class="control-group actions">
-                <!-- Tombol SyncAll disembunyikan karena fungsinya digabung ke Refresh -->
                 <button id="syncAllBtn" class="btn btn-warning" style="display:none;">🔄 Sync All Companies</button>
-                
                 <button id="refreshBtn" class="btn btn-primary" title="Sinkronisasi data terbaru & muat ulang">🔄 Refresh Data</button>
                 <button id="exportBtn" class="btn btn-secondary">📥 Export CSV</button>
                 <label class="toggle-switch" title="Auto-refresh setiap 5 menit">
@@ -97,7 +100,7 @@
                 <span id="filteredCount" class="badge">0 data</span>
             </h2>
             
-            <div id="loading" class="loading">⏳ Loading data dari spreadsheet...</div>
+            <div id="loading" class="loading">⏳ Loading data dari Firestore...</div>
             <div id="error" class="error" style="display: none;"></div>
             <div id="emptyState" class="empty-state" style="display: none;">
                 <p>Tidak ada data yang sesuai dengan filter</p>
@@ -114,6 +117,6 @@
     </div>
 
     <!-- Link ke JavaScript terpisah -->
-    <script src="script.js"></script>
+    <script src="script.js?v=3.3"></script>
 </body>
 </html>
