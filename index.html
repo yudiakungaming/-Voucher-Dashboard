@@ -8,8 +8,8 @@
     <!-- Link ke CSS terpisah -->
     <link rel="stylesheet" href="style.css">
     
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+    <!-- ✅ Favicon sederhana (menghindari encoding issue) -->
+    <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
     
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -89,7 +89,7 @@
                 </select>
             </div>
             
-            <!-- 🔥 NEW: Status Multi-Select Filter -->
+            <!-- Status Multi-Select Filter -->
             <div class="control-group">
                 <label>✅ Status</label>
                 <div class="multi-select">
@@ -108,7 +108,7 @@
                 </div>
             </div>
             
-            <!-- 🔥 NEW: Nominal Range Filter -->
+            <!-- Nominal Range Filter -->
             <div class="control-group">
                 <label>🔢 Range Nominal</label>
                 <div class="range-inputs">
@@ -118,7 +118,7 @@
                 </div>
             </div>
             
-            <!-- 🔥 NEW: Quick Period Filter -->
+            <!-- Quick Period Filter -->
             <div class="control-group">
                 <label>📅 Quick Period</label>
                 <div class="quick-periods">
@@ -174,7 +174,7 @@
                 <button class="btn btn-small" onclick="clearFilters()">🔄 Reset Filter</button>
             </div>
             
-            <!-- 🔥 NEW: Pagination Controls (Top) -->
+            <!-- Pagination Controls (Top) -->
             <div class="pagination-controls" id="paginationTop" style="display:none;">
                 <span id="paginationInfo">Halaman 1 dari 1</span>
                 <div class="pagination-buttons">
@@ -193,7 +193,7 @@
             
             <div id="tableContainer"></div>
             
-            <!-- 🔥 NEW: Pagination Controls (Bottom) -->
+            <!-- Pagination Controls (Bottom) -->
             <div class="pagination-controls" id="paginationBottom" style="display:none;">
                 <span id="paginationInfoBottom">Halaman 1 dari 1</span>
                 <div class="pagination-buttons">
@@ -214,15 +214,17 @@
     </div>
 
     <!-- Link ke JavaScript terpisah -->
-    <script src="script.js?v=4.0"></script>
+    <script src="script.js?v=4.1"></script>
     
-    <!-- 🔥 NEW: Service Worker untuk PWA -->
+    <!-- Service Worker untuk PWA -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').then(() => {
-                console.log('✅ Service Worker registered');
-            }).catch(err => {
-                console.log('❌ Service Worker failed:', err);
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then((registration) => {
+                    console.log('✅ Service Worker registered:', registration.scope);
+                }).catch((err) => {
+                    console.log('❌ Service Worker failed:', err);
+                });
             });
         }
     </script>
