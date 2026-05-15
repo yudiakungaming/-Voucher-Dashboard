@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════
-// FINANCE SYNC PRO - DASHBOARD SCRIPT (v4.2 - FIXED COLUMN)
-// ✅ FIX: Column "dibayarkanKepada" sync with Firebase
+// FINANCE SYNC PRO - DASHBOARD SCRIPT (v4.3 - FINAL SYNC)
+// ✅ FIX: Column "dibayarkanKepada" included in normalization
 // ✅ Semua fitur + Charts, Pagination, PWA, Advanced Filters
 // ═══════════════════════════════════════════════════════
 
@@ -479,7 +479,7 @@ function applyFilters() {
         const nominal = parseFloat(v.nominal) || 0;
         if (nominal < nominalMin || nominal > nominalMax) return false;
         if (searchTerm) {
-            // UPDATED: v.dibayarkanKepada
+            // MENAMBAHKAN v.dibayarkanKepada ke dalam pencarian
             const searchFields = [v.no_invoice, v.isi_invoice, v.lokasi, v.jenis, v.dibayarkanKepada, v.file_name]
                 .filter(Boolean).join(' ').toLowerCase();
             if (!searchFields.includes(searchTerm)) return false;
@@ -691,7 +691,7 @@ function displayTable(vouchers) {
     if (!container) return;
     if (vouchers.length === 0) { showEmptyState('🔍 Tidak ada data yang sesuai filter'); return; }
     
-    // UPDATED: 'dibayarkanKepada' sebagai key
+    // DEFINISI KOLOM - Memastikan dibayarkanKepada ada di index yang benar
     const columns = [
         { key: 'tanggal', label: 'Tanggal', sortable: true },
         { key: 'no_invoice', label: 'No Invoice', sortable: true },
@@ -740,7 +740,6 @@ function displayTable(vouchers) {
 
 function exportToCSV() {
     if (filteredVouchers.length === 0) { alert('Tidak ada data untuk di-export'); return; }
-    // UPDATED: 'dibayarkanKepada'
     const columns = ['tanggal', 'no_invoice', 'company', 'jenis', 'lokasi', 'isi_invoice', 'nominal', 'status', 'dibayarkanKepada', 'file_url'];
     const headers = ['Tanggal', 'No Invoice', 'Company', 'Jenis', 'Lokasi', 'Keterangan', 'Nominal', 'Status', 'Dibayarkan', 'Link File'];
     let csv = headers.join(',') + '\n';
@@ -776,7 +775,6 @@ function exportToPDF() {
     doc.setTextColor(102, 102, 102);
     doc.text(`Tanggal: ${new Date().toLocaleDateString('id-ID')} • Total: ${filteredVouchers.length} voucher`, 14, 28);
     
-    // UPDATED: v.dibayarkanKepada
     const tableData = filteredVouchers.map(v => [
         v.tanggal, v.no_invoice, (v.company || '').toUpperCase(), v.jenis, v.lokasi, 
         formatRupiah(v.nominal), v.status, v.dibayarkanKepada || '-'
@@ -810,13 +808,19 @@ function toggleAutoRefresh(enabled) {
     }
 }
 
+// ═══════════════════════════════════════════════════════
+// ⚙️ DATA NORMALIZATION (FIXED)
+// ═══════════════════════════════════════════════════════
 function normalizeData(response) {
     let raw = [];
     if (Array.isArray(response)) raw = response;
     else if (response?.success && Array.isArray(response.data)) raw = response.data;
     else if (response?.data && Array.isArray(response.data)) raw = response.data;
+    
     return raw.map(item => ({
         ...item,
+        // MEMASTIKAN PROPERTI INI TETAP ADA
+        dibayarkanKepada: item.dibayarkanKepada || '-',
         company: item.company ? String(item.company).trim().toLowerCase() : '',
         nominal: String(item.nominal || '').replace(/[^0-9.-]/g, '') || '0',
         status: item.status ? String(item.status).trim() : 'Belum'
